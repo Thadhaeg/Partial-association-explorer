@@ -773,7 +773,7 @@ server <- function(input, output, session) {
             )
           }
         })
-        nav_panel(paste0(v1, " vs. ", v2), plotOutput(plotname, height = "600px"))
+        nav_panel(paste0(v1, " vs ", v2), plotOutput(plotname, height = "600px"))
       }
     })
     tagList(navset_card_tab(id = "bivariate_tabs", !!!tabs))
