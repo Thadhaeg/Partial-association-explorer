@@ -1,0 +1,700 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{hyperref}
+
+\title{Association Measures, Test Statistics and Pair Plots\\
+  for the Association Explorer Application}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+The \emph{Association Explorer} application is designed to help users explore the association structure of a dataset by combining global association measures, formal significance tests, and visual pairwise summaries. The application systematically analyzes all pairwise combinations of variables and distinguishes six distinct cases:
+\begin{itemize}
+\item numeric--numeric (unconditional),
+\item numeric--numeric (conditional on control variables),
+\item numeric--categorical (unconditional),
+\item numeric--categorical (conditional),
+\item categorical--categorical (unconditional),
+\item categorical--categorical (conditional).
+\end{itemize}
+
+For each pair of variables, the app performs three complementary tasks:
+\begin{enumerate}
+\item it computes a global \emph{association measure} in $[0,1]$ (or within a naturally bounded range), summarizing the strength of the relationship between the two variables;
+\item it performs a formal \emph{statistical test} of the null hypothesis of no association (or conditional independence), reporting a test statistic and its associated \emph{$p$-value};
+\item it produces \emph{pair plots} that provide a local, visual representation of the relationship, complementing the global summary.
+\end{enumerate}
+
+These three components are also combined into a \emph{correlation network}, where variables are represented as nodes and edges are drawn between pairs whose association measure exceeds a user-specified threshold and whose $p$-value is below a chosen significance level.
+
+\medskip
+
+A central distinction throughout the application is between \emph{unconditional} and \emph{conditional} association:
+\begin{itemize}
+\item In the \textbf{unconditional} case, the relationship between two variables $(X,Y)$ is studied without accounting for any additional covariates.
+\item In the \textbf{conditional} case, a set of control variables $Z$ (which may include both numerical and categorical variables) is introduced, and the association between $X$ and $Y$ is assessed after adjusting for the effect of $Z$.
+\end{itemize}
+
+In all conditional settings, this adjustment is implemented through an appropriate regression model. The resulting association measure therefore quantifies the strength of the relationship between $X$ and $Y$ that remains after accounting for the influence of $Z$.
+
+\medskip
+
+Although different statistical models are used depending on the type of variables (linear regression, analysis of variance, or multinomial logit models), all association measures used in the app share a common interpretation: they are normalized measures of association strength taking values in $[0,1]$, where values close to zero indicate weak or no association and values close to one indicate a strong association. Specifically:
+\begin{itemize}
+\item $R^2$ is used for numeric--numeric relationships,
+\item $\eta^2$ is used for numeric--categorical relationships,
+\item $V_L$ is used for categorical--categorical relationships and is derived from likelihood-ratio statistics.
+\end{itemize}
+These measures are tailored to their respective modelling frameworks but are conceptually comparable.
+
+\medskip
+
+The null hypothesis tested in each case corresponds to the absence of association between the variables under consideration. Depending on the context, this may take the form of zero correlation, equality of group means, or (conditional) independence in a probabilistic model.
+
+\medskip
+
+Finally, the pair plots provided by the application offer a local perspective on the association structure. While the global measures summarize the overall strength of the relationship, the pair plots reveal how this association is distributed across observations, groups, or contingency table cells, thereby facilitating interpretation and diagnosis.
+
+\medskip
+
+The remainder of this document is organized by type of variables. For each case (numeric--numeric, numeric--categorical, categorical--categorical), we describe the association measure used in the app (both unconditional and conditional), the corresponding test statistic and $p$-value, and the construction and interpretation of the associated pair plots.
+
+
+\section{Case A: Numeric--numeric variables}
+
+Let $X$ and $Y$ be two numeric variables, observed on $n$ units. In the conditional case, let $Z = (Z_1,\dots,Z_q)$ denote a vector of control variables.
+
+\subsection{Association measures}
+
+\subsubsection*{Unconditional association}
+
+In the unconditional numeric--numeric case, the association between $X$ and $Y$ is summarized by the (Pearson) correlation coefficient
+\begin{align}
+r_{XY}
+&=
+\frac{
+\sum_{t=1}^n (X_t - \bar{X})(Y_t - \bar{Y})
+}{
+\sqrt{\sum_{t=1}^n (X_t - \bar{X})^2}
+\,
+\sqrt{\sum_{t=1}^n (Y_t - \bar{Y})^2}
+}.
+\end{align}
+Here $\bar{X}$ and $\bar{Y}$ denote sample means. The app uses the squared correlation
+\begin{align}
+R^2_{XY} = r_{XY}^2,
+\qquad
+0 \le R^2_{XY} \le 1,
+\end{align}
+as a global, symmetric measure of association between $X$ and $Y$.
+
+Interpretation:
+\begin{itemize}
+\item $R^2_{XY}$ can be interpreted as the proportion of variance of $Y$ explained by $X$ in the simple linear regression of $Y$ on $X$, or equivalently of $X$ explained by $Y$ in the regression of $X$ on $Y$.
+\item $R^2_{XY} = 0$ indicates no linear association; values close to 1 indicate a strong linear association.
+\item The sign of $r_{XY}$ (stored separately) indicates whether the association is positive or negative.
+\end{itemize}
+
+\subsubsection*{Conditional association}
+
+In the conditional numeric--numeric case, the goal is to measure the association between $X$ and $Y$ \emph{conditional on} the control variables $Z$. The app relies on the \emph{partial correlation} between $X$ and $Y$ given $Z$:
+\begin{enumerate}
+\item First, regress $X$ on $Z$ using linear regression and compute the residuals
+\begin{align}
+\hat{\varepsilon}^X_t = X_t - \hat{X}_t,
+\qquad
+t = 1,\dots,n,
+\end{align}
+where
+\begin{align}
+\hat{X}_t = \widehat{\mathbb{E}}(X_t \mid Z_t).
+\end{align}
+
+\item Similarly, regress $Y$ on $Z$ and compute the residuals
+\begin{align}
+\hat{\varepsilon}^Y_t = Y_t - \hat{Y}_t.
+\end{align}
+
+\item Compute the Pearson correlation between these two residual series:
+\begin{align}
+r_{XY\cdot Z}
+&=
+\frac{
+\sum_{t=1}^n \hat{\varepsilon}^X_t \hat{\varepsilon}^Y_t
+}{
+\sqrt{\sum_{t=1}^n (\hat{\varepsilon}^X_t)^2}
+\,
+\sqrt{\sum_{t=1}^n (\hat{\varepsilon}^Y_t)^2}
+}.
+\end{align}
+\end{enumerate}
+
+The conditional association measure is then
+\begin{align}
+R^2_{XY\cdot Z} = r_{XY\cdot Z}^2 \in [0,1].
+\end{align}
+
+Interpretation:
+\begin{itemize}
+\item $R^2_{XY\cdot Z}$ quantifies the strength of the linear association between $X$ and $Y$ that remains after removing the linear effects of the controls $Z$.
+\item $R^2_{XY\cdot Z} = 0$ means that, once $Z$ is taken into account, $X$ and $Y$ are linearly uncorrelated; large values indicate a strong residual association.
+\item The sign of $r_{XY\cdot Z}$ indicates whether this conditional association is positive or negative.
+\end{itemize}
+
+\subsection{Test statistics and $p$-values}
+
+\subsubsection*{Unconditional case}
+
+To test the null hypothesis
+\begin{align}
+H_0:\ r_{XY} = 0
+\qquad
+\text{vs}
+\qquad
+H_1:\ r_{XY} \neq 0,
+\end{align}
+the app uses the standard $t$-statistic
+\begin{align}
+T
+&=
+r_{XY}
+\sqrt{
+\frac{n-2}{1-r_{XY}^2}
+}.
+\end{align}
+Under $H_0$ and assuming approximate normality of $X$ and $Y$, the statistic $T$ follows a Student distribution with $n-2$ degrees of freedom:
+\begin{align}
+T \sim t_{n-2}.
+\end{align}
+The two-sided $p$-value is computed as
+\begin{align}
+p
+=
+2\,\Pr\left( |T_{n-2}| \ge |T| \right),
+\end{align}
+where $T_{n-2}$ is a $t$ random variable with $n-2$ degrees of freedom. This $p$-value is what the app uses to decide whether an edge is drawn (in combination with the user-specified threshold on $R^2_{XY}$).
+
+\subsubsection*{Conditional case}
+
+In the conditional case, the null hypothesis is
+\begin{align}
+H_0:\ r_{XY\cdot Z} = 0
+\qquad
+\text{vs}
+\qquad
+H_1:\ r_{XY\cdot Z} \neq 0.
+\end{align}
+Let $q$ denote the number of control covariates in $Z$. Under mild regularity conditions, the partial correlation $r_{XY\cdot Z}$ can be tested with
+\begin{align}
+T_{\text{cond}}
+&=
+r_{XY\cdot Z}
+\sqrt{
+\frac{n-q-2}{1-r_{XY\cdot Z}^2}
+},
+\end{align}
+which under $H_0$ approximately follows a Student distribution where $n-q-2$ corresponds to the residual degrees of freedom of the underlying regression models:
+\begin{align}
+T_{\text{cond}} \sim t_{n-q-2}.
+\end{align}
+The two-sided $p$-value is then
+\begin{align}
+p
+=
+2\,\Pr\left( |T_{n-q-2}| \ge |T_{\text{cond}}| \right).
+\end{align}
+
+\subsection{Pair plots}
+
+In the numeric--numeric case, the app provides two types of pair plots for each pair $(X,Y)$.
+
+\subsubsection*{Unconditional case}
+
+\paragraph{Scatter plot.}
+The primary plot is a scatter plot of the raw data:
+\begin{align}
+\{(X_t, Y_t): t = 1,\dots,n\},
+\end{align}
+augmented with a fitted regression line and a display of the coefficient's value. In the current implementation, the plot also displays the slope of the fitted line, and the user can reverse the axes. This plot displays the overall shape of the relationship (linear, nonlinear, presence of clusters, outliers, etc.) and allows a qualitative assessment of the sign and strength of the global association measured by $R^2_{XY}$.
+
+\subsubsection*{Conditional case}
+
+In the conditional case, the pair plots aim to show the association between $X$ and $Y$ after removing the linear effects of $Z$.
+
+\paragraph{Added-variable plot.}
+The app computes residuals $\hat{\varepsilon}^X_t$ and $\hat{\varepsilon}^Y_t$ from linear regressions of $X$ and $Y$ on $Z$, and then produces a scatter plot of
+\begin{align}
+\{(\hat{\varepsilon}^X_t, \hat{\varepsilon}^Y_t): t = 1,\dots,n\}.
+\end{align}
+This plot can be interpreted as the scatter of $X$ and $Y$ ``adjusted'' for $Z$. Its overall pattern reflects the conditional association summarized numerically by $R^2_{XY\cdot Z}$, and local patterns in this plot indicate where and how the conditional relationship departs from linearity. In the current app, this plot is presented explicitly as an added-variable (partial regression) plot and also displays the corresponding slope and partial correlation.
+
+These plots provide a visual counterpart to the global association measure by highlighting the structure of the relationship at the observation level.
+While $R^2_{XY}$ or $R^2_{XY\cdot Z}$ summarizes it globally, the scatter plot provides a local view of the association.
+
+\section{Case B: Numeric--categorical variables}
+
+Let $Y$ be a numeric variable and $X$ a categorical variable taking $J$ distinct values (groups) $1,\dots,J$. In the conditional case, the association between $X$ and $Y$ is studied in the presence of controls $Z$.
+
+\subsection{Association measures}
+
+\subsubsection*{Unconditional association}
+
+In the unconditional numeric--categorical case, the association between $X$ and $Y$ is naturally summarized by the classical ANOVA decomposition.
+
+Let $\bar{Y}$ denote the overall mean and $\bar{Y}_j$ the mean of $Y$ in group $X=j$. The total sum of squares is
+\[
+  \mathrm{SST} = \sum_{t=1}^n (Y_t - \bar{Y})^2,
+\]
+and the between-group sum of squares is
+\[
+  \mathrm{SSB} = \sum_{j=1}^J n_j (\bar{Y}_j - \bar{Y})^2,
+\]
+where $n_j$ is the number of observations in group $j$. The app uses the ratio
+\[
+  \eta^2 = \frac{\mathrm{SSB}}{\mathrm{SST}}, \qquad 0 \le \eta^2 \le 1,
+\]
+as the global association measure between $X$ and $Y$.
+
+Interpretation:
+\begin{itemize}
+\item $\eta^2$ can be interpreted as the proportion of variance of $Y$ explained by $X$ through differences between group means.
+\item $\eta^2 = 0$ corresponds to equality of means across groups; higher values of $\eta^2$ indicate stronger differences between group means relative to the overall variability of $Y$.
+\end{itemize}
+
+\subsubsection*{Conditional association}
+
+In the conditional numeric--categorical case, the app uses a linear regression/ANCOVA framework with controls $Z$ and group indicators for $X$.
+
+Consider the linear model with both $X$ and $Z$:
+\[
+  Y_t = \alpha + \sum_{j=2}^J \beta_j \, 1\{X_t = j\} + \sum_{k=1}^q \gamma_k Z_{kt} + \varepsilon_t,
+\]
+with $X=1$ used as the reference group. Let $\mathrm{RSS}_{\text{full}}$ denote the residual sum of squares of this full model, and let $\mathrm{RSS}_{\text{red}}$ denote the residual sum of squares of the reduced model without the group indicators:
+\[
+  Y_t = \alpha' + \sum_{k=1}^q \gamma'_k Z_{kt} + \varepsilon'_t.
+\]
+The \emph{partial} sum of squares attributable to $X$ given $Z$ is
+\[
+  \mathrm{SS}(X \mid Z) = \mathrm{RSS}_{\text{red}} - \mathrm{RSS}_{\text{full}}.
+\]
+The app defines the conditional association measure as
+\[
+  \eta^2_{X\mid Z} = \frac{\mathrm{SS}(X \mid Z)}{\mathrm{SS}(X \mid Z) + \mathrm{RSS}_{\text{full}}} \in [0,1].
+\]
+
+Interpretation:
+\begin{itemize}
+  \item $\eta^2_{X\mid Z}$ measures the proportion of the residual variance (after adjusting for $Z$) that is further explained by the group structure defined by $X$.
+  \item $\eta^2_{X\mid Z} = 0$ means that, once the controls $Z$ are taken into account, the group indicator $X$ does not improve the fit of the model; large values indicate that $X$ still explains a substantial part of the conditional variability of $Y$.
+\end{itemize}
+
+\subsection{Test statistics and $p$-values}
+
+\subsubsection*{Unconditional case}
+
+To test the null hypothesis of equal means across groups
+\[
+  H_0: \bar{Y}_1 = \cdots = \bar{Y}_J \qquad \text{vs} \qquad H_1: \text{at least one group mean differs},
+\]
+the app uses the classical one-way ANOVA $F$-statistic
+\[
+  F = \frac{\mathrm{SSB}/(J-1)}{\mathrm{SSW}/(n-J)},
+\]
+where
+\[
+  \mathrm{SSW} = \sum_{j=1}^J \sum_{t: X_t=j} (Y_t - \bar{Y}_j)^2
+\]
+is the within-group sum of squares. Under $H_0$ and standard ANOVA assumptions, $F$ approximately follows an $F$ distribution with $(J-1, n-J)$ degrees of freedom:
+\[
+  F \sim F_{J-1, n-J}.
+\]
+The $p$-value is
+\[
+  p = \Pr\left( F_{J-1, n-J} \ge F \right),
+\]
+which is the value reported by the app.
+
+\subsubsection*{Conditional case}
+
+In the conditional case, the null hypothesis is
+\[
+  H_0: \beta_2 = \cdots = \beta_J = 0 \quad \text{(no effect of $X$ given $Z$)}
+\]
+in the full model
+\[
+  Y_t = \alpha + \sum_{j=2}^J \beta_j \, 1\{X_t = j\} + \sum_{k=1}^q \gamma_k Z_{kt} + \varepsilon_t.
+\]
+
+The app uses the \emph{extra-sum-of-squares} $F$-test comparing the full and reduced models. The test statistic is
+\[
+  F_{\text{cond}}
+  =
+  \frac{\left(\mathrm{RSS}_{\text{red}} - \mathrm{RSS}_{\text{full}}\right)/(J-1)}
+  {\mathrm{RSS}_{\text{full}}/\mathrm{df}_2},
+\]
+where $\mathrm{df}_2$ denotes the residual degrees of freedom of the full model.
+
+Under $H_0$, this statistic is approximately compared to an $F$ distribution with $(J-1, \mathrm{df}_2)$ degrees of freedom:
+\[
+  F_{\text{cond}} \sim F_{J-1, \mathrm{df}_2}.
+\]
+The $p$-value is
+\[
+  p = \Pr\left( F_{J-1, \mathrm{df}_2} \ge F_{\text{cond}} \right).
+\]
+
+\subsection{Pair plots}
+
+The pair plots in the numeric--categorical case are based on group means and residualized means, and are designed to connect clearly with the ANOVA/ANCOVA interpretation of the association measures.
+
+\subsubsection*{Unconditional case}
+
+\paragraph{Group means plot.} The app computes, for each category $j$ of $X$,
+\[
+  \bar{Y}_j = \frac{1}{n_j} \sum_{t: X_t=j} Y_t,
+\]
+and displays a plot of $\bar{Y}_j$ against the categories $j$ (for example as a bar plot with error bars or a dot plot with confidence intervals). The overall mean $\bar{Y}$ can be added as a reference line.
+
+Interpretation: Vertical differences between the group means $\bar{Y}_j$ directly reflect the between-group variability measured by $\mathrm{SSB}$ and summarized globally by $\eta^2$.
+
+\subsubsection*{Conditional case}
+
+In the presence of controls $Z$, the app replaces simple group means by
+\emph{residualized means}, which represent differences between groups after
+removing the linear dependence of $Y$ on the controls.
+
+\paragraph{Step 1: Remove the effect of $Z$ from $Y$.}
+The app first fits the regression model
+\begin{equation}
+  Y_t = a + \sum_{k=1}^q \gamma_k Z_{kt} + u_t,
+  \qquad t=1,\dots,n,
+  \label{eq:Y_on_Z}
+\end{equation}
+and computes the residuals
+\begin{equation}
+  \tilde{Y}_t = \hat{u}_t = Y_t - \widehat{\mathbb{E}}(Y_t \mid Z_t).
+  \label{eq:residualized_Y}
+\end{equation}
+
+\paragraph{Step 2: Compute group means of the residualized outcome.}
+For each category $j$ of the categorical variable $X$, the app computes the mean of the residualized values within that group:
+\begin{equation}
+  \bar{\tilde{Y}}_j
+  = \frac{1}{n_j}\sum_{t: X_t=j}\tilde{Y}_t,
+  \qquad j=1,\dots,J.
+  \label{eq:residualized_means}
+\end{equation}
+
+\paragraph{Pair plot.}
+The conditional pair plot displays $\bar{\tilde{Y}}_j$ across the categories $j$, typically as a bar plot (or dot plot) ordered by value.
+
+\paragraph{Interpretation.}
+\begin{itemize}
+  \item $\bar{\tilde{Y}}_j$ is the average part of $Y$ in group $j$ that remains after removing the linear dependence on $Z$.
+  \item Differences between $\bar{\tilde{Y}}_j$ across groups indicate a residual effect of $X$ on $Y$ conditional on $Z$.
+\end{itemize}
+
+These plots provide a direct visual interpretation of the variance decomposition underlying $\eta^2$.
+Group means (or residualized means) provide a local view of the association, while $\eta^2$ or $\eta^2_{X\mid Z}$ summarizes it globally.
+
+\section{Case C: Categorical--categorical association}
+
+We now consider the case where both variables $X$ and $Y$ are categorical.
+Let $X$ take $I$ distinct categories and $Y$ take $J$ distinct categories.
+
+In the app, both the unconditional and conditional analyses are based on a joint multinomial model for the outcome
+\begin{align}
+W = (X,Y),
+\end{align}
+which is treated as a single categorical variable with $K = IJ$ possible categories.
+
+The modelling strategy is based on baseline-category multinomial logits. A reference category $(i_0,j_0)$ is chosen; in the implementation, this is the first level of $X$ and the first level of $Y$. No separate intercept is needed, because the logits are defined relative to the baseline category.
+
+\subsection{Global association measures}
+
+\subsubsection*{General principle}
+
+Let $\ell_0$ and $\ell_1$ denote the maximized log-likelihoods under the null and alternative models, respectively. The likelihood-ratio statistic is defined as
+\begin{align}
+G^2 = 2(\ell_1 - \ell_0).
+\end{align}
+
+From $G^2$, the app computes a symmetric, bounded association measure
+\begin{align}
+V_L = \sqrt{1 - \exp\!\left(-\frac{G^2}{n}\right)},
+\end{align}
+where $n$ is the sample size. This coefficient takes values in $[0,1)$, equals zero under independence, and can be interpreted as a normalized measure of association strength, analogous to $R^2$ or $\eta^2$, but derived from likelihood comparisons.
+
+In the conditional case, the same construction yields $V_{L\mid Z}$.
+
+\subsubsection*{Unconditional association}
+
+In the unconditional setting, there are no control variables. The joint probabilities of the categories $(i,j)$ are modelled through logits relative to the baseline category $(i_0,j_0)$.
+
+\paragraph{Null model (independence).}
+
+Under the null model, the logit for cell $(i,j)$ is written as
+\begin{align}
+\eta^{(0)}_{ij}
+=
+\alpha_i + \beta_j,
+\end{align}
+so that
+\begin{align}
+\log\frac{\Pr(W=(i,j))}{\Pr(W=(i_0,j_0))}
+=
+\eta^{(0)}_{ij}.
+\end{align}
+
+The corresponding probabilities are
+\begin{align}
+\Pr(W=(i,j))
+=
+\frac{\exp\!\left(\eta^{(0)}_{ij}\right)}
+{\sum_{r=1}^I \sum_{s=1}^J \exp\!\left(\eta^{(0)}_{rs}\right)}.
+\end{align}
+
+Interpretation:
+\begin{itemize}
+\item $\alpha_i$ is the main effect of category $X=i$ on the logit scale;
+\item $\beta_j$ is the main effect of category $Y=j$ on the logit scale;
+\item the absence of interaction terms means that the association structure is fully explained by separate effects of $X$ and $Y$, corresponding to independence.
+\end{itemize}
+
+\paragraph{Alternative model (association).}
+
+Under the alternative model, interaction terms are added:
+\begin{align}
+\eta^{(1)}_{ij}
+=
+\alpha_i + \beta_j + \gamma_{ij},
+\end{align}
+so that
+\begin{align}
+\log\frac{\Pr(W=(i,j))}{\Pr(W=(i_0,j_0))}
+=
+\eta^{(1)}_{ij}.
+\end{align}
+
+Interpretation:
+\begin{itemize}
+\item $\gamma_{ij}$ is the interaction effect for the joint category $(i,j)$;
+\item $\gamma_{ij} > 0$ indicates that the combination $(X=i,Y=j)$ is more likely than expected under independence;
+\item $\gamma_{ij} < 0$ indicates under-representation;
+\item $\gamma_{ij} = 0$ corresponds to no residual association for that cell beyond the main effects.
+\end{itemize}
+
+The unconditional likelihood-ratio statistic is then
+\begin{align}
+G^2 = 2(\ell_1 - \ell_0),
+\end{align}
+and the global association measure $V_L$ is computed from it.
+
+\subsubsection*{Conditional association}
+
+Let $Z = (Z_1,\dots,Z_q)$ denote a vector of control variables, which may be numeric, categorical (after coding), or mixed.
+
+In the conditional case, the app models the joint outcome $W=(X,Y)$ conditionally on $Z$ using a structured multinomial logit model.
+
+\paragraph{Null model (conditional independence).}
+
+Under the null hypothesis
+\begin{align}
+H_0: X \perp Y \mid Z,
+\end{align}
+the linear predictor for category $(i,j)$ is
+\begin{align}
+\eta^{(0)}_{ij}(z)
+=
+\alpha_i + \beta_j
++ \sum_{k=1}^q \lambda_{ik} z_k
++ \sum_{k=1}^q \kappa_{jk} z_k.
+\end{align}
+
+The corresponding multinomial logits are
+\begin{align}
+\log\frac{\Pr(W=(i,j)\mid Z=z)}{\Pr(W=(i_0,j_0)\mid Z=z)}
+=
+\eta^{(0)}_{ij}(z),
+\end{align}
+and the probabilities are
+\begin{align}
+\Pr(W=(i,j)\mid Z=z)
+=
+\frac{\exp\!\left(\eta^{(0)}_{ij}(z)\right)}
+{\sum_{r=1}^I \sum_{s=1}^J \exp\!\left(\eta^{(0)}_{rs}(z)\right)}.
+\end{align}
+
+Interpretation of the coefficients:
+\begin{itemize}
+\item $\alpha_i$ is the baseline effect of category $X=i$;
+\item $\beta_j$ is the baseline effect of category $Y=j$;
+\item $\lambda_{ik}$ is the effect of covariate $Z_k$ on the logit contribution associated with category $X=i$;
+\item $\kappa_{jk}$ is the effect of covariate $Z_k$ on the logit contribution associated with category $Y=j$.
+\end{itemize}
+
+Thus, under the null model, the effect of $Z$ is allowed to shift the probabilities of the categories of $X$ and $Y$, but no residual interaction between $X$ and $Y$ is present.
+
+\paragraph{Alternative model.}
+
+Under the alternative hypothesis
+\begin{align}
+H_1: X \not\!\perp Y \mid Z,
+\end{align}
+the model adds interaction terms:
+\begin{align}
+\eta^{(1)}_{ij}(z)
+=
+\alpha_i + \beta_j
++ \sum_{k=1}^q \lambda_{ik} z_k
++ \sum_{k=1}^q \kappa_{jk} z_k
++ \gamma_{ij}.
+\end{align}
+
+Equivalently,
+\begin{align}
+\log\frac{\Pr(W=(i,j)\mid Z=z)}{\Pr(W=(i_0,j_0)\mid Z=z)}
+=
+\eta^{(1)}_{ij}(z).
+\end{align}
+
+Interpretation:
+\begin{itemize}
+\item $\gamma_{ij}$ is the residual interaction effect for the joint category $(i,j)$ after adjusting for $Z$;
+\item $\gamma_{ij} > 0$ means that $(X=i,Y=j)$ occurs more often than expected under conditional independence given $Z$;
+\item $\gamma_{ij} < 0$ means that it occurs less often than expected;
+\item $\gamma_{ij} = 0$ corresponds to no residual conditional association for that cell.
+\end{itemize}
+
+\paragraph{Identifiability constraints.}
+
+To identify the model, the implementation uses reference-category constraints. If the first levels of $X$ and $Y$ are used as references, then
+\begin{align}
+\alpha_{i_0} &= 0, \\
+\beta_{j_0}  &= 0, \\
+\lambda_{i_0 k} &= 0 \qquad \text{for all } k, \\
+\kappa_{j_0 k} &= 0 \qquad \text{for all } k, \\
+\gamma_{i_0 j} &= 0 \qquad \text{for all } j, \\
+\gamma_{i j_0} &= 0 \qquad \text{for all } i.
+\end{align}
+
+So:
+\begin{itemize}
+\item only the non-reference categories of $X$ and $Y$ receive free main-effect parameters;
+\item only the non-reference categories receive $Z$-slope parameters;
+\item only the cells outside the reference row and reference column receive free interaction parameters $\gamma_{ij}$.
+\end{itemize}
+
+\paragraph{Likelihood-ratio statistic.}
+
+Let $\ell_0$ and $\ell_1$ denote the maximized log-likelihoods under the null and alternative models. The conditional likelihood-ratio statistic is
+\begin{align}
+G^2_{\mid Z} = 2(\ell_1 - \ell_0),
+\end{align}
+and the corresponding association measure is
+\begin{align}
+V_{L\mid Z} = \sqrt{1 - \exp\!\left(-\frac{G^2_{\mid Z}}{n}\right)}.
+\end{align}
+
+\subsubsection*{Inference}
+
+Under regularity conditions, the likelihood-ratio statistic is compared to a $\chi^2$ distribution with degrees of freedom equal to the number of free interaction parameters,
+\begin{align}
+(I-1)(J-1),
+\end{align}
+or more generally the difference in dimension between the full and null models.
+
+The resulting $p$-value provides a global test of unconditional or conditional independence between $X$ and $Y$.
+
+\subsection{Pair plots and local association patterns}
+
+Beyond global association measures, the app visualizes local departures from the null model using observed and expected counts.
+
+\subsubsection*{General construction}
+
+Let $O_{ij}$ denote the observed count in cell $(i,j)$:
+\begin{align}
+O_{ij}
+=
+\sum_{t=1}^n \mathbf{1}\{X_t=i,\,Y_t=j\}.
+\end{align}
+
+From the fitted null model, the app computes expected counts $E^{(0)}_{ij}$ and the local quantities:
+\begin{itemize}
+\item the deviation
+\begin{align}
+D_{ij} = O_{ij} - E^{(0)}_{ij},
+\end{align}
+\item the Pearson residual
+\begin{align}
+R_{ij}
+=
+\frac{
+O_{ij} - E^{(0)}_{ij}
+}{
+\sqrt{E^{(0)}_{ij}}
+},
+\end{align}
+\item the local interaction parameter $\gamma_{ij}$ from the fitted model.
+\end{itemize}
+
+\subsubsection*{Unconditional pair plots}
+
+In the unconditional case, expected counts $E^{(0)}_{ij}$ are obtained from the fitted null joint multinomial model under independence.
+
+Each cell of the contingency table:
+\begin{itemize}
+\item displays the deviation $D_{ij}$,
+\item is colored according to the Pearson residual $R_{ij}$,
+\item and may additionally be associated with the corresponding interaction parameter $\gamma_{ij}$.
+\end{itemize}
+
+\subsubsection*{Conditional pair plots}
+
+In the conditional case, expected counts are computed from the fitted null model for $W\mid Z$:
+\begin{align}
+E^{(0)}_{ij}
+=
+\sum_{t=1}^n
+\Pr(X=i,Y=j \mid Z_t;\widehat{\theta}_0),
+\end{align}
+where $\widehat{\theta}_0$ denotes the estimated parameters under the null model.
+
+Observed counts are aggregated over the full sample, ensuring comparability with the unconditional case.
+
+The same visualization is used:
+\begin{itemize}
+\item cell values correspond to $D_{ij}$,
+\item colors are driven by $R_{ij}$,
+\item and $\gamma_{ij}$ measures the local residual association on the logit scale.
+\end{itemize}
+
+\paragraph{Interpretation.}
+\begin{itemize}
+\item $D_{ij}$ measures the absolute departure from the null model in count units;
+\item $R_{ij}$ standardizes this departure relative to its expected variability;
+\item $\gamma_{ij}$ is a model-based local interaction coefficient, interpreted as the residual association between categories $X=i$ and $Y=j$ after accounting for the main effects and, in the conditional case, for the effects of $Z$.
+\end{itemize}
+
+These plots provide a local decomposition of the global likelihood-based association measure.
+
+\section*{References}
+
+\begin{itemize}
+  \item Agresti, A. (1990). \emph{Categorical Data Analysis}. Wiley.
+  \item Agresti, A. (2013). \emph{Categorical Data Analysis}, 3rd ed. Wiley.
+  \item Cox, D.~R., \& Snell, E.~J. (1989). \emph{The Analysis of Binary Data}. Chapman \& Hall.
+  \item McFadden, D. (1974). ``Conditional Logit Analysis of Qualitative Choice Behavior.'' In P.~Zarembka (Ed.), \emph{Frontiers in Econometrics}, Academic Press.
+\end{itemize}
+
+\end{document}
