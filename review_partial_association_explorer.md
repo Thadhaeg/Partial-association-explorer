@@ -139,7 +139,7 @@ The current draft is a pure methods paper (a LaTeX article class document with s
 
 - **Missing metadata tables**: SoftwareX requires a structured metadata table (Table 1) with fields such as current code version, permanent link to code, legal software license, computing platform, programming language, and dependencies. This is entirely absent from the draft.
 
-- ✓ **No license declared**: the GitHub repository and the paper both omit a software license. Confirmed: no `LICENSE` file exists at the repository root. All software and code must be open source and released under a recognized legal license. Add a `LICENSE` file to the repository before submission.
+- ✓ **No license declared in the paper**: A MIT `LICENSE` file has been added to the repository root. The repository requirement is now satisfied. However, the paper itself still does not mention the license. The SoftwareX metadata table must explicitly state the license name and SPDX identifier (e.g., `MIT`). Add this to the metadata table when writing the SoftwareX manuscript.
 
 - **GitHub requirement**: Code must be stored in an open-access GitHub repository; avoid using GitLab or other hosting platforms. The repository appears to be on GitHub already; confirm it is public and the URL is recorded in the metadata table.
 
@@ -229,7 +229,7 @@ The following items are ordered by urgency for the meeting.
 
 1. **Define `safe_g2_cell()`** or remove the fallback branch that calls it (`partial_association_explorer_7.r:2299`). Currently causes a fatal error whenever `fit0` fails in `compute_unconditional()`. *(Confirmed: function is called but never defined.)*
 
-2. **Add an open-source license** to the repository (`LICENSE` file). Required by SoftwareX and good practice regardless. *(Confirmed: no LICENSE file exists.)*
+2. ~~**Add an open-source license** to the repository (`LICENSE` file).~~ *(Done: MIT License added to the repository root.)* **Remaining action**: declare the license (MIT, SPDX: `MIT`) in the SoftwareX metadata table and in the paper.
 
 3. **Fix `compute_conditional()` fallback**: ensure the returned list uses `VL/Z` (or better, `VL_Z`) consistently, including in **all three** fallback paths (`partial_association_explorer_7.r:2402-2403`, `2448-2451`, `2480-2497`), so the association matrix never receives a silent `NULL`. *(Confirmed: three un-renamed paths found, not just one.)*
 

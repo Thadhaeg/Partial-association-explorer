@@ -40,3 +40,15 @@ The app also includes:
 - **Scatter plots + Added-variable plots** for continuous variables
 - **Contingency tables** with dynamic formatting
 - **Distribution summaries** for selected variables
+
+---
+
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting bugs, suggesting enhancements, and submitting pull requests.
+
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

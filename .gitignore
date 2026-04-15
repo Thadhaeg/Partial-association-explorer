@@ -16,3 +16,6 @@
 # knitr / rmarkdown
 *_cache/
 *_files/
+
+# output
+*.html
