@@ -1,0 +1,18 @@
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+.Renviron
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# RStudio
+.Rproj.user
+
+# knitr / rmarkdown
+*_cache/
+*_files/
