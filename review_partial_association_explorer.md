@@ -109,7 +109,7 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 - Add at least a minimal `testthat` test file for the pure statistical helper functions (partial correlation, eta-squared, VL), separated from the Shiny UI.
 
-- ✓ The file is named `partial_association_explorer_7.r`. The version number in the filename is unusual and will create citation and reproducibility issues. Note: the app footer already embeds a version string (`"v3.5.5."`, `partial_association_explorer_7.r:206`), which is inconsistent with the `_7` in the filename. Use a proper versioning system (git tags + `DESCRIPTION` file or a version constant inside the app) and name the file `app.R`.
+- ~~✓ The file is named `partial_association_explorer_7.r`. The version number in the filename is unusual and will create citation and reproducibility issues. Use a proper versioning system (git tags + `DESCRIPTION` file or a version constant inside the app) and name the file `app.R`.~~ *(Done: file renamed to `app.r` and version string removed from footer.)*
 
 - Consider replacing the monolithic optim-based cat-cat fitting with `nnet::multinom()`, which is already a declared dependency and handles larger tables more robustly. The structured parametrization can be encoded via a custom predictor matrix or by direct likelihood comparison between two `multinom()` calls with appropriate formula specifications.
 
@@ -121,7 +121,7 @@ The following issues were not mentioned in the original review but were found du
 
 - **`compute_conditional()` empty-Zdf fallback also returns without renaming**: When called with `Zdf = NULL` or `ncol(Zdf) == 0`, `compute_conditional()` immediately returns `compute_unconditional()` at `partial_association_explorer_7.r:2402-2403`, before the renaming at line 2522. In practice this path is guarded by the caller (`has_controls && !is.null(control_data)`), so it should not be reached, but the function's internal contract is still inconsistent.
 
-- **Version mismatch between filename and footer**: The file is named `partial_association_explorer_7.r` (suggesting version 7), but the app footer displays `"v3.5.5."` (`partial_association_explorer_7.r:206`). These two version identifiers are irreconcilable and will confuse anyone trying to cite or reproduce a specific version.
+- ~~**Version mismatch between filename and footer**: The file is named `partial_association_explorer_7.r` (suggesting version 7), but the app footer displays `"v3.5.5."`.~~ *(Done: file renamed to `app.r` and version string removed from footer.)*
 
 ---
 
@@ -141,7 +141,7 @@ The current draft is a pure methods paper (a LaTeX article class document with s
 
 - ✓ **No license declared in the paper**: A MIT `LICENSE` file has been added to the repository root. The repository requirement is now satisfied. However, the paper itself still does not mention the license. The SoftwareX metadata table must explicitly state the license name and SPDX identifier (e.g., `MIT`). Add this to the metadata table when writing the SoftwareX manuscript.
 
-- **GitHub requirement**: Code must be stored in an open-access GitHub repository; avoid using GitLab or other hosting platforms. The repository appears to be on GitHub already; confirm it is public and the URL is recorded in the metadata table.
+- ✓ **GitHub requirement**: Code must be stored in an open-access GitHub repository; avoid using GitLab or other hosting platforms. The repository is on GitHub (`https://github.com/Thadhaeg/Partial-association-explorer`) and the footer link has been updated to point to it. **Remaining action**: record the URL in the SoftwareX metadata table.
 
 **Formatting issues**
 
@@ -257,7 +257,7 @@ The following items are ordered by urgency for the meeting.
 
 13. **Add convergence/progress feedback** for large cat-cat computations (spinner or warning about computation time for large tables).
 
-14. **Rename the file** from `partial_association_explorer_7.r` to `app.R` and reconcile the version identifier with the footer string `"v3.5.5."` (`partial_association_explorer_7.r:206`). *(New finding: two conflicting version identifiers exist.)*
+14. ~~**Rename the file** from `partial_association_explorer_7.r` to `app.R` and reconcile the version identifier with the footer string.~~ *(Done: file renamed to `app.r` and version string removed from footer.)*
 
 ### Lower priority (polish)
 

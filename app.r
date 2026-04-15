@@ -204,10 +204,10 @@ ui <- tagList(
     tags$hr(),
     tags$footer(
       class = "app-footer",
-      "v3.5.5.",
+      "See the ",
       tags$a(
-        href = "https://github.com/AntoineSoetewey/AssociationExplorer",
-        "Code",
+        href = "https://github.com/Thadhaeg/Partial-association-explorer",
+        "code",
         target = "_blank"
       )
     ),
