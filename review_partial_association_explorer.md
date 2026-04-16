@@ -77,11 +77,11 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 - ✓ `cat("Button", button_id, "clicked!...\n")` (`partial_association_explorer_7.r:729-735`) and `cat("Partial correlation failed:", ...)` (`partial_association_explorer_7.r:892`) debug print statements are left in production code. Remove them or replace with `message()`.
 
-- ✓ The function `find_optimal_submatrix()` (`partial_association_explorer_7.r:2702`) and `find_optimal_submatrix_heuristic()` (`partial_association_explorer_7.r:2825`) are defined inside the server but are only called from `build_contingency_table()` (`partial_association_explorer_7.r:2868`), which is itself never called anywhere in the app. This dead code suggests an incomplete refactor: the old chi-squared contingency table path was replaced by the new VL-based cat-cat rendering but the old function was not removed.
+- ~~✓ The function `find_optimal_submatrix()` and `find_optimal_submatrix_heuristic()` are defined inside the server but are only called from `build_contingency_table()`, which is itself never called anywhere in the app.~~ *(Done: all three functions moved to `archive.r`.)*
 
-- ✓ `library(VGAM)` is loaded at the top of the file (`partial_association_explorer_7.r:16`) but no VGAM function is called anywhere in the code. Remove it to avoid unnecessary dependency.
+- ~~✓ `library(VGAM)` is loaded at the top of the file but no VGAM function is called anywhere in the code.~~ *(Done: removed from `app.r`.)*
 
-- ✓ `library(grid)` and `library(gridExtra)` are loaded (`partial_association_explorer_7.r:9-10`) but no calls to `grid::` or `gridExtra::` functions (e.g., `grid.arrange`, `arrangeGrob`) appear anywhere in the file. Remove both.
+- ~~✓ `library(grid)` and `library(gridExtra)` are loaded but no calls to `grid::` or `gridExtra::` functions appear anywhere in the file.~~ *(Done: both removed from `app.r`.)*
 
 - ✓ The `make_Z_design()` helper (`partial_association_explorer_7.r:1722`) constructs a model matrix with `stats::model.matrix(~., data = Zdf)` and then removes the intercept column. This works but will silently fail if `Zdf` contains a factor with only one level (dropped by model.matrix), potentially shifting column indices. Add a check or use `model.matrix(~. -1, data = Zdf)` directly (being aware of the reference-category change this implies).
 
@@ -91,7 +91,7 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 2. ✓ **Single-level factor controls**: if a control variable is a factor with only one level present after filtering complete cases, `model.matrix()` will drop it silently. Downstream, `ncol(Zmm)` will differ from `length(input$control_vars)`, and the `df` in the p-value calculation will be wrong. The variation check (`has_variation`) in `calculate_partial_eta_squared_with_F()` handles this for that function, but not consistently across all functions that build control matrices.
 
-3. ✓ **`build_contingency_table()` never called**: the function is defined at `partial_association_explorer_7.r:2868` and references `var_descriptions()` (a reactive) outside any reactive context. If it were called, it would error. This is dead code and should be removed or properly integrated.
+3. ~~✓ **`build_contingency_table()` never called**~~ *(Done: moved to `archive.r` along with `find_optimal_submatrix()` and `find_optimal_submatrix_heuristic()`.)*
 
 4. ✓ **Large datasets and `optim()`**: for large contingency tables (say 10x10 = 100 cells, 81 free gamma parameters), the BFGS optimizer will be slow, and the app will appear to hang. No progress indicator or timeout is provided for the correlation matrix calculation. Consider capping the number of categories per variable at which the full model is attempted, or using `nnet::multinom()` with a Kronecker-product parametrization as a faster alternative.
 
@@ -243,7 +243,7 @@ The following items are ordered by urgency for the meeting.
 
 7. **Rename `VL/Z`** to `VL_Z` everywhere for robustness. *(Confirmed: slash in list name works but prevents use of `$` accessor.)*
 
-8. **Remove dead code**: `build_contingency_table()`, `find_optimal_submatrix()`, `find_optimal_submatrix_heuristic()`, `library(VGAM)`, `library(grid)`, `library(gridExtra)`. *(All confirmed unused; grid and gridExtra confirmed fully unused, not just "possibly".)*
+8. ~~**Remove dead code**: `build_contingency_table()`, `find_optimal_submatrix()`, `find_optimal_submatrix_heuristic()`, `library(VGAM)`, `library(grid)`, `library(gridExtra)`.~~ *(Done: three functions moved to `archive.r`; three unused `library()` calls removed from `app.r`.)*
 
 9. **Fix the `threshold_cat` slider label**: change `"Cramer's V"` (`partial_association_explorer_7.r:116`) to `V_L` to match the actual statistic computed, and align with README and paper. *(New finding from Section 1.6.)*
 
