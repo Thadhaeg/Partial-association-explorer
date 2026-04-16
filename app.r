@@ -211,26 +211,1268 @@ ui <- tagList(
   )
 )
 
+# =============================================================================
+# Statistical helper functions (pure; no Shiny reactive dependencies)
+# These are defined at the top level so they can be unit-tested independently
+# of the Shiny server.
+# =============================================================================
+
+# Helper to build nice reactable tables
+make_table <- function(df, columns_defs) {
+  reactable(
+    df,
+    columns = columns_defs,
+    bordered = TRUE,
+    striped = TRUE,
+    highlight = TRUE,
+    defaultPageSize = 25,
+    showPageSizeOptions = TRUE,
+    pageSizeOptions = c(25, 50),
+    theme = reactableTheme(
+      headerStyle = list(fontWeight = "bold")
+    )
+  )
+}
+
+# NEW : Helper: compute residuals of y after regressing on controls
+partial_residuals <- function(y, controls_df) {
+  if (is.null(controls_df) || ncol(controls_df) == 0) {
+    return(y)
+  }
+
+  # Drop controls with no variation
+  keep <- sapply(controls_df, function(z) length(unique(z[!is.na(z)])) > 1)
+  controls_clean <- controls_df[, keep, drop = FALSE]
+
+  if (ncol(controls_clean) == 0) {
+    return(y)
+  }
+
+  dfm <- data.frame(y = y, controls_clean)
+  residuals(lm(y ~ ., data = dfm))
+}
+
+# NEW: Residualize a numeric outcome on controls (Y ~ Z) and return residuals
+residualize_on_controls <- function(y, controls_df) {
+  if (is.null(controls_df) || ncol(controls_df) == 0) {
+    return(y)
+  }
+
+  # Keep controls with variation only (avoid singular fits)
+  keep <- sapply(controls_df, function(z) length(unique(z[!is.na(z)])) > 1)
+  controls_clean <- controls_df[, keep, drop = FALSE]
+  if (ncol(controls_clean) == 0) {
+    return(y)
+  }
+
+  dfm <- data.frame(y = y, controls_clean)
+  dfm <- stats::na.omit(dfm)
+  if (nrow(dfm) == 0) {
+    return(numeric(0))
+  }
+
+  fit <- try(stats::lm(y ~ ., data = dfm), silent = TRUE)
+  if (inherits(fit, "try-error")) {
+    return(numeric(0))
+  }
+
+  residuals(fit)
+}
+
+# NEW: Partial eta-squared with F-test and p-value
+calculate_partial_eta_squared_with_F <- function(
+  num_var,
+  cat_var,
+  control_data = NULL
+) {
+  # Build initial data frame robustly
+  if (is.null(control_data) || nrow(control_data) == 0) {
+    df_temp <- data.frame(
+      num_var = num_var,
+      cat_var = as.factor(cat_var)
+    )
+  } else {
+    if (
+      length(num_var) != nrow(control_data) ||
+        length(cat_var) != nrow(control_data)
+    ) {
+      return(list(
+        eta = 0,
+        eta_sq = 0,
+        F = NA_real_,
+        df1 = 0,
+        df2 = 0,
+        p_value = NA_real_,
+        type = "sqrt(Partial Eta²)"
+      ))
+    }
+    df_temp <- data.frame(
+      num_var = num_var,
+      cat_var = as.factor(cat_var),
+      control_data
+    )
+  }
+
+  df_temp <- stats::na.omit(df_temp)
+
+  # Need some data
+  if (nrow(df_temp) == 0) {
+    return(list(
+      eta = 0,
+      eta_sq = 0,
+      F = NA_real_,
+      df1 = 0,
+      df2 = 0,
+      p_value = NA_real_,
+      type = "sqrt(Partial Eta²)"
+    ))
+  }
+
+  # Names for convenience
+  all_names <- names(df_temp)
+  response_name <- "num_var"
+  cat_name <- "cat_var"
+  control_names <- setdiff(all_names, c(response_name, cat_name))
+
+  # Check variation for all non-response variables (cat_var + controls)
+  vars_nonresp <- c(cat_name, control_names)
+
+  has_variation <- sapply(df_temp[, vars_nonresp, drop = FALSE], function(z) {
+    # For factors: require at least 2 used levels and 2 unique values
+    if (is.factor(z)) {
+      used_levels <- unique(z[!is.na(z)])
+      length(used_levels) > 1 && length(unique(z[!is.na(z)])) > 1
+    } else {
+      length(unique(z[!is.na(z)])) > 1
+    }
+  })
+
+  # If categorical predictor has no variation → nothing to test
+  if (!isTRUE(has_variation[cat_name])) {
+    return(list(
+      eta = 0,
+      eta_sq = 0,
+      F = NA_real_,
+      df1 = 0,
+      df2 = 0,
+      p_value = NA_real_,
+      type = "sqrt(Partial Eta²)"
+    ))
+  }
+
+  # Keep only controls that have variation
+  controls_kept <- control_names[has_variation[control_names]]
+
+  # Rebuild df_temp with: num_var, cat_var, and only "good" controls
+  df_temp <- df_temp[,
+    c(response_name, cat_name, controls_kept),
+    drop = FALSE
+  ]
+
+  # If num_var has no variance → nothing to explain
+  if (var(df_temp[[response_name]]) == 0) {
+    return(list(
+      eta = 0,
+      eta_sq = 0,
+      F = NA_real_,
+      df1 = 0,
+      df2 = 0,
+      p_value = NA_real_,
+      type = "sqrt(Partial Eta²)"
+    ))
+  }
+
+  # Fit models safely
+  fit_res <- try(
+    {
+      # Full model: num_var ~ cat_var + controls
+      model_full <- lm(num_var ~ ., data = df_temp)
+
+      # Reduced model:
+      #   if we have controls: num_var ~ controls
+      #   if no controls: num_var ~ 1 (intercept only)
+      if (length(controls_kept) > 0) {
+        df_reduced <- df_temp[, c(response_name, controls_kept), drop = FALSE]
+        model_reduced <- lm(num_var ~ ., data = df_reduced)
+      } else {
+        df_reduced <- df_temp[, response_name, drop = FALSE]
+        model_reduced <- lm(num_var ~ 1, data = df_reduced)
+      }
+
+      list(
+        full = model_full,
+        reduced = model_reduced
+      )
+    },
+    silent = TRUE
+  )
+
+  if (inherits(fit_res, "try-error")) {
+    # If anything weird happens in lm, fail gracefully
+    return(list(
+      eta = 0,
+      eta_sq = 0,
+      F = NA_real_,
+      df1 = 0,
+      df2 = 0,
+      p_value = NA_real_,
+      type = "sqrt(Partial Eta²)"
+    ))
+  }
+
+  model_full <- fit_res$full
+  model_reduced <- fit_res$reduced
+
+  ss_res_full <- sum(residuals(model_full)^2)
+  ss_res_reduced <- sum(residuals(model_reduced)^2)
+  ss_effect <- ss_res_reduced - ss_res_full
+
+  # df for the categorical factor (m - 1)
+  m <- nlevels(df_temp[[cat_name]])
+  q <- m - 1 # numerator df
+  df2 <- df.residual(model_full) # denominator df
+
+  if (ss_effect <= 0 || ss_res_full <= 0 || q <= 0 || df2 <= 0) {
+    return(list(
+      eta = 0,
+      eta_sq = 0,
+      F = NA_real_,
+      df1 = q,
+      df2 = df2,
+      p_value = NA_real_,
+      type = "sqrt(Partial Eta²)"
+    ))
+  }
+
+  partial_eta_sq <- ss_effect / (ss_effect + ss_res_full)
+  F_stat <- (ss_effect / q) / (ss_res_full / df2)
+  p_val <- 1 - pf(F_stat, q, df2)
+
+  list(
+    eta = sqrt(partial_eta_sq),
+    eta_sq = partial_eta_sq,
+    F = F_stat,
+    df1 = q,
+    df2 = df2,
+    p_value = p_val,
+    type = "sqrt(Partial Eta²)"
+  )
+}
+
+# NEW: p-value for (partial) correlation given controls
+p_value_partial_cor <- function(r, n_eff, k_controls) {
+  # r: partial correlation
+  # n_eff: number of complete cases used
+  # k_controls: number of control variables
+  if (is.na(r)) {
+    return(NA_real_)
+  }
+  if (abs(r) >= 1) {
+    return(0)
+  } # perfect correlation
+
+  df <- n_eff - k_controls - 2
+  if (df <= 0) {
+    return(NA_real_)
+  }
+
+  t_stat <- r * sqrt(df / (1 - r^2))
+  F_stat <- t_stat^2
+  p_val <- 1 - pf(F_stat, 1, df)
+  p_val
+}
+
+# ============================================================
+# Case C (cat-cat)
+# ============================================================
+
+# ----------------------------
+# Helpers for cat-cat computations
+# ----------------------------
+
+make_Z_design <- function(Zdf) {
+  Zmm <- stats::model.matrix(~., data = Zdf) # includes intercept
+  Zmm <- Zmm[, colnames(Zmm) != "(Intercept)", drop = FALSE]
+  as.data.frame(Zmm)
+}
+
+get_W_levels <- function(obj) {
+  # same nesting logic for W
+  if (is.list(obj) && !is.null(obj$W)) {
+    return(obj$W)
+  }
+  if (
+    is.list(obj) &&
+      !is.null(obj$fit) &&
+      is.list(obj$fit) &&
+      !is.null(obj$fit$W)
+  ) {
+    return(obj$fit$W)
+  }
+  stop("Cannot find W inside fit object.")
+}
+
+build_constraints_xy <- function(
+  x_levels,
+  y_levels,
+  ref_x = x_levels[1],
+  ref_y = y_levels[1],
+  outcome_levels = NULL,
+  sep = "___AE___",
+  include_gamma = TRUE
+) {
+  # ---- Build full IJ outcome levels robustly ----
+  I <- length(x_levels)
+  J <- length(y_levels)
+
+  base_lab <- paste(ref_x, ref_y, sep = sep)
+
+  if (is.null(outcome_levels)) {
+    grid <- expand.grid(
+      x = as.character(x_levels),
+      y = as.character(y_levels),
+      KEEP.OUT.ATTRS = FALSE,
+      stringsAsFactors = FALSE
+    )
+    outcome_levels <- paste(grid$x, grid$y, sep = sep)
+  } else {
+    outcome_levels <- as.character(outcome_levels)
+  }
+
+  if (!(base_lab %in% outcome_levels)) {
+    stop("Baseline cell not found among outcome levels: ", base_lab)
+  }
+
+  # baseline first
+  outcome_levels <- c(base_lab, setdiff(outcome_levels, base_lab))
+
+  # ---- Parse outcome levels into (x,y) ----
+  parts <- strsplit(outcome_levels, split = sep, fixed = TRUE)
+  lens <- lengths(parts)
+  if (any(lens != 2)) {
+    bad <- outcome_levels[which(lens != 2)]
+    stop(
+      "Cannot parse W levels into (X,Y) using sep='",
+      sep,
+      "'. ",
+      "Example bad levels: ",
+      paste(utils::head(bad, 5), collapse = ", ")
+    )
+  }
+
+  x_of_k <- vapply(parts, `[[`, character(1), 1)
+  y_of_k <- vapply(parts, `[[`, character(1), 2)
+
+  # ---- logits correspond to rows 1..(K-1) excluding baseline ----
+  x_logits <- x_of_k[-1]
+  y_logits <- y_of_k[-1]
+
+  # K is the number of outcome categories we actually model
+  K <- length(outcome_levels)
+
+  if (include_gamma && K != I * J) {
+    stop(
+      "Cannot use full alpha/beta/gamma corner parametrization unless K == I*J (full grid)."
+    )
+  }
+
+  if (length(x_logits) != (K - 1) || length(y_logits) != (K - 1)) {
+    stop(
+      "Internal error: logits length mismatch.\n",
+      "K=",
+      K,
+      " so K-1=",
+      (K - 1),
+      "\n",
+      "length(x_logits)=",
+      length(x_logits),
+      " length(y_logits)=",
+      length(y_logits),
+      "\n"
+    )
+  }
+
+  # extra safety: stop early if anything is NA
+  if (anyNA(x_logits) || anyNA(y_logits)) {
+    stop(
+      "Parsed x_logits/y_logits contain NA. First few outcomes:\n",
+      paste(utils::head(outcome_levels, 10), collapse = "\n")
+    )
+  }
+
+  # ---- Intercept block: alpha + beta (+ gamma if include_gamma) ----
+  p_alpha <- I - 1
+  p_beta <- J - 1
+  p_gamma <- if (include_gamma) (I - 1) * (J - 1) else 0L
+  p0 <- p_alpha + p_beta + p_gamma
+
+  # Under H1 (include_gamma=TRUE), p0 must equal K-1.
+  # Under H0 (include_gamma=FALSE), p0 < K-1 is expected and OK.
+  if (include_gamma && p0 != (K - 1)) {
+    stop("Mismatch: with gamma, p0 must equal K-1. Check levels.")
+  }
+
+  C0 <- matrix(0, nrow = K - 1, ncol = p0)
+
+  cn <- c(
+    paste0("alpha[", setdiff(x_levels, ref_x), "]"),
+    paste0("beta[", setdiff(y_levels, ref_y), "]")
+  )
+  if (include_gamma) {
+    cn <- c(
+      cn,
+      as.vector(outer(
+        setdiff(x_levels, ref_x),
+        setdiff(y_levels, ref_y),
+        FUN = function(a, b) paste0("gamma[", a, ",", b, "]")
+      ))
+    )
+  }
+  colnames(C0) <- cn
+
+  alpha_cols <- setNames(seq_len(p_alpha), setdiff(x_levels, ref_x))
+  beta_cols <- setNames(p_alpha + seq_len(p_beta), setdiff(y_levels, ref_y))
+
+  gamma_index <- NULL
+  if (include_gamma) {
+    gamma_names <- colnames(C0)[(p_alpha + p_beta + 1):p0]
+    gamma_index <- setNames((p_alpha + p_beta + 1):p0, gamma_names)
+  }
+
+  for (r in seq_along(x_logits)) {
+    xi <- x_logits[r]
+    yj <- y_logits[r]
+
+    if (is.na(xi) || is.na(yj)) {
+      stop("NA xi/yj at r=", r, ". This should never happen.")
+    }
+
+    if (xi != ref_x) {
+      C0[r, alpha_cols[[xi]]] <- 1
+    }
+    if (yj != ref_y) {
+      C0[r, beta_cols[[yj]]] <- 1
+    }
+    if (include_gamma && xi != ref_x && yj != ref_y) {
+      gnm <- paste0("gamma[", xi, ",", yj, "]")
+      C0[r, gamma_index[[gnm]]] <- 1
+    }
+  }
+
+  # ---- Z slope block: lambda_i,k + kappa_j,k ----
+  pz <- (I - 1) + (J - 1)
+  Cz <- matrix(0, nrow = K - 1, ncol = pz)
+  colnames(Cz) <- c(
+    paste0("lambda[", setdiff(x_levels, ref_x), "]"),
+    paste0("kappa[", setdiff(y_levels, ref_y), "]")
+  )
+
+  lambda_cols <- setNames(seq_len(I - 1), setdiff(x_levels, ref_x))
+  kappa_cols <- setNames((I - 1) + seq_len(J - 1), setdiff(y_levels, ref_y))
+
+  for (r in seq_along(x_logits)) {
+    xi <- x_logits[r]
+    yj <- y_logits[r]
+    if (xi != ref_x) {
+      Cz[r, lambda_cols[[xi]]] <- 1
+    }
+    if (yj != ref_y) Cz[r, kappa_cols[[yj]]] <- 1
+  }
+
+  list(
+    outcome_levels = outcome_levels,
+    base_lab = base_lab,
+    C0 = C0,
+    Cz = Cz,
+    ref_x = ref_x,
+    ref_y = ref_y,
+    sep = sep,
+    x_levels = x_levels,
+    y_levels = y_levels,
+    include_gamma = include_gamma
+  )
+}
+
+# ----------------------------
+# Manual structured multinomial logit via optim()
+# ----------------------------
+
+softmax_rows <- function(eta) {
+  # eta: n x K matrix
+  m <- apply(eta, 1, max)
+  ex <- exp(eta - m)
+  ex / rowSums(ex)
+}
+
+# Build mapping from each joint category w = (x_i, y_j) to indices i, j
+parse_W_levels <- function(W_levels, sep, x_levels, y_levels) {
+  parts <- strsplit(W_levels, split = sep, fixed = TRUE)
+  wx <- vapply(parts, `[[`, "", 1)
+  wy <- vapply(parts, `[[`, "", 2)
+
+  # validate
+  if (any(!wx %in% x_levels) || any(!wy %in% y_levels)) {
+    stop(
+      "Some W levels cannot be mapped back to x_levels/y_levels. Check sep and factor labels."
+    )
+  }
+
+  i_idx <- match(wx, x_levels)
+  j_idx <- match(wy, y_levels)
+  list(wx = wx, wy = wy, i = i_idx, j = j_idx)
+}
+
+# Pack/unpack theta for H1 and H0
+# Baseline constraints: alpha[ref_x]=0, beta[ref_y]=0, gamma[ref_x,*]=0, gamma[*,ref_y]=0
+make_param_index <- function(I, J, q, include_gamma = TRUE) {
+  # free alpha: I-1, free beta: J-1
+  # free gamma: (I-1)(J-1) if include_gamma else 0
+  # free lambda: (I-1)*q, free kappa: (J-1)*q
+  p_alpha <- I - 1
+  p_beta <- J - 1
+  p_gamma <- if (include_gamma) (I - 1) * (J - 1) else 0L
+  p_lambda <- (I - 1) * q
+  p_kappa <- (J - 1) * q
+
+  list(
+    p_alpha = p_alpha,
+    p_beta = p_beta,
+    p_gamma = p_gamma,
+    p_lambda = p_lambda,
+    p_kappa = p_kappa,
+    p_total = p_alpha + p_beta + p_gamma + p_lambda + p_kappa
+  )
+}
+
+unpack_theta <- function(theta, I, J, q, include_gamma = TRUE) {
+  idx <- make_param_index(I, J, q, include_gamma)
+  stopifnot(length(theta) == idx$p_total)
+
+  pos <- 1
+  take <- function(k) {
+    out <- theta[pos:(pos + k - 1)]
+    pos <<- pos + k
+    out
+  }
+
+  alpha_free <- take(idx$p_alpha) # length I-1
+  beta_free <- take(idx$p_beta) # length J-1
+  gamma_free <- if (include_gamma) take(idx$p_gamma) else numeric(0)
+  lambda_free <- take(idx$p_lambda) # length (I-1)*q
+  kappa_free <- take(idx$p_kappa) # length (J-1)*q
+
+  # Expand into full arrays with baseline = 0
+  alpha <- c(0, alpha_free) # length I  (assumes ref_x is first level)
+  beta <- c(0, beta_free) # length J  (assumes ref_y is first level)
+
+  gamma <- matrix(0, nrow = I, ncol = J)
+  if (include_gamma) {
+    # fill only rows 2..I and cols 2..J (corner constraints)
+    gamma[2:I, 2:J] <- matrix(
+      gamma_free,
+      nrow = I - 1,
+      ncol = J - 1,
+      byrow = FALSE
+    )
+  }
+
+  lambda <- matrix(0, nrow = I, ncol = q)
+  kappa <- matrix(0, nrow = J, ncol = q)
+  if (q > 0) {
+    lambda[2:I, ] <- matrix(
+      lambda_free,
+      nrow = I - 1,
+      ncol = q,
+      byrow = FALSE
+    )
+    kappa[2:J, ] <- matrix(kappa_free, nrow = J - 1, ncol = q, byrow = FALSE)
+  }
+
+  list(
+    alpha = alpha,
+    beta = beta,
+    gamma = gamma,
+    lambda = lambda,
+    kappa = kappa
+  )
+}
+
+# Compute eta (n x K) for all joint outcomes in W_levels
+compute_eta <- function(pars, mapW, Zmm, n_obs) {
+  # mapW$i, mapW$j are length K vectors
+  K <- length(mapW$i)
+  q <- if (is.null(Zmm)) 0L else ncol(Zmm)
+
+  eta <- matrix(0, nrow = n_obs, ncol = K)
+
+  # intercept part per category k
+  base_cat <- pars$alpha[mapW$i] +
+    pars$beta[mapW$j] +
+    pars$gamma[cbind(mapW$i, mapW$j)]
+  eta <- eta + matrix(base_cat, nrow = n_obs, ncol = K, byrow = TRUE)
+
+  # Z slopes
+  if (q > 0) {
+    slope_mat <- matrix(0, nrow = K, ncol = q)
+    for (k in seq_len(K)) {
+      slope_mat[k, ] <- pars$lambda[mapW$i[k], ] + pars$kappa[mapW$j[k], ]
+    }
+    eta <- eta + Zmm %*% t(slope_mat)
+  }
+
+  eta
+}
+
+# Fit structured multinomial with optim; returns fitted pi and params
+fit_structured_mnl <- function(
+  x_fac,
+  y_fac,
+  Zdf = NULL,
+  sep = "___AE___",
+  include_gamma = TRUE
+) {
+  x_fac <- droplevels(factor(x_fac))
+  y_fac <- droplevels(factor(y_fac))
+
+  ok <- if (is.null(Zdf) || ncol(Zdf) == 0) {
+    stats::complete.cases(x_fac, y_fac)
+  } else {
+    stats::complete.cases(x_fac, y_fac, Zdf)
+  }
+
+  x_fac <- droplevels(x_fac[ok])
+  y_fac <- droplevels(y_fac[ok])
+  if (!is.null(Zdf) && ncol(Zdf) > 0) {
+    Zdf <- Zdf[ok, , drop = FALSE]
+  }
+
+  x_levels <- levels(x_fac)
+  y_levels <- levels(y_fac)
+  I <- length(x_levels)
+  J <- length(y_levels)
+
+  # joint outcome on FULL support (all I*J combinations, including zero-count cells)
+  grid <- expand.grid(
+    x = as.character(x_levels),
+    y = as.character(y_levels),
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  W_levels <- paste(grid$x, grid$y, sep = sep)
+  K <- length(W_levels) # should be I * J
+
+  # observed outcome labels, mapped into the full-support W_levels
+  W_obs_labels <- paste(as.character(x_fac), as.character(y_fac), sep = sep)
+  y_idx_local <- match(W_obs_labels, W_levels)
+
+  if (anyNA(y_idx_local)) {
+    stop("Some observed (X,Y) pairs could not be matched to full W_levels.")
+  }
+
+  # Z design
+  Zmm <- NULL
+  if (!is.null(Zdf) && ncol(Zdf) > 0) {
+    Zmm <- as.matrix(make_Z_design(as.data.frame(Zdf)))
+  }
+  q <- if (is.null(Zmm)) 0L else ncol(Zmm)
+
+  mapW <- parse_W_levels(W_levels, sep, x_levels, y_levels)
+
+  idx <- make_param_index(I, J, q, include_gamma)
+  theta0 <- rep(0, idx$p_total)
+
+  negloglik <- function(theta) {
+    pars <- unpack_theta(theta, I, J, q, include_gamma)
+    eta <- compute_eta(pars, mapW, Zmm, n_obs = length(y_idx_local))
+    pi <- softmax_rows(eta)
+
+    p_obs <- pi[cbind(seq_len(nrow(pi)), y_idx_local)]
+    if (any(!is.finite(p_obs)) || any(p_obs <= 0)) {
+      return(1e12)
+    }
+    -sum(log(p_obs))
+  }
+
+  fit <- stats::optim(
+    par = theta0,
+    fn = negloglik,
+    method = "BFGS",
+    control = list(maxit = 1000, reltol = 1e-8)
+  )
+
+  pars_hat <- unpack_theta(fit$par, I, J, q, include_gamma)
+  eta_hat <- compute_eta(pars_hat, mapW, Zmm, n_obs = length(y_idx_local))
+  pi_hat <- softmax_rows(eta_hat)
+
+  list(
+    fit = fit,
+    pi_hat = pi_hat,
+    y_idx = y_idx_local,
+    W_obs_labels = W_obs_labels,
+    W_levels = W_levels,
+    x_levels = x_levels,
+    y_levels = y_levels,
+    params = pars_hat
+  )
+}
+
+expected_counts_from_pi <- function(
+  pi_hat,
+  W_levels,
+  x_levels,
+  y_levels,
+  sep = "___AE___"
+) {
+  I <- length(x_levels)
+  J <- length(y_levels)
+  E <- matrix(0, nrow = I, ncol = J, dimnames = list(x_levels, y_levels))
+
+  parts <- strsplit(W_levels, split = sep, fixed = TRUE)
+  wx <- vapply(parts, `[[`, "", 1)
+  wy <- vapply(parts, `[[`, "", 2)
+
+  col_sums <- colSums(pi_hat)
+  for (k in seq_along(W_levels)) {
+    E[wx[k], wy[k]] <- col_sums[k]
+  }
+  E
+}
+
+safe_pearson_cell <- function(O, E) {
+  if (is.na(O) || is.na(E) || E <= 0) {
+    return(NA_real_)
+  }
+  (O - E) / sqrt(E)
+}
+
+# ----------------------------
+# Helpers for cat-cat outputs
+# ----------------------------
+
+make_catcat_result <- function(
+  VL = NA_real_,
+  p_value = NA_real_,
+  O = NULL,
+  E0 = NULL,
+  D = NULL,
+  R = NULL,
+  gamma = NULL,
+  alpha = NULL,
+  beta = NULL,
+  lambda = NULL,
+  kappa = NULL
+) {
+  list(
+    VL = VL,
+    p_value = p_value,
+    O = O,
+    E0 = E0,
+    D = D,
+    R = R,
+    gamma = gamma,
+    alpha = alpha,
+    beta = beta,
+    lambda = lambda,
+    kappa = kappa
+  )
+}
+
+compute_local_tables <- function(O, E0) {
+  D <- O - E0
+
+  R <- matrix(
+    NA_real_,
+    nrow = nrow(O),
+    ncol = ncol(O),
+    dimnames = dimnames(O)
+  )
+
+  for (i in seq_len(nrow(O))) {
+    for (j in seq_len(ncol(O))) {
+      R[i, j] <- safe_pearson_cell(O[i, j], E0[i, j])
+    }
+  }
+
+  list(D = D, R = R)
+}
+
+compute_lr_stats <- function(ll0, ll1, df, n) {
+  G2 <- 2 * (ll1 - ll0)
+  p_value <- if (df > 0 && is.finite(G2) && G2 >= 0) {
+    1 - stats::pchisq(G2, df = df)
+  } else {
+    NA_real_
+  }
+  VL <- if (n > 0 && is.finite(G2)) sqrt(1 - exp(-G2 / n)) else NA_real_
+
+  list(G2 = G2, p_value = p_value, VL = VL)
+}
+
+compute_marginal_expected <- function(O) {
+  n <- sum(O)
+  outer(rowSums(O), colSums(O)) / n
+}
+
+# ----------------------------
+# Unconditional cat-cat
+# ----------------------------
+
+compute_unconditional <- function(x_vec, y_vec) {
+  x_fac <- droplevels(factor(x_vec))
+  y_fac <- droplevels(factor(y_vec))
+
+  ok <- stats::complete.cases(x_fac, y_fac)
+  x_fac <- droplevels(x_fac[ok])
+  y_fac <- droplevels(y_fac[ok])
+
+  if (length(x_fac) == 0) {
+    return(make_catcat_result(
+      VL = 0,
+      p_value = NA_real_,
+      O = NULL,
+      E0 = NULL,
+      D = NULL,
+      R = NULL,
+      gamma = NULL,
+      alpha = NULL,
+      beta = NULL,
+      lambda = NULL,
+      kappa = NULL
+    ))
+  }
+
+  O <- as.matrix(table(x_fac, y_fac))
+  n <- sum(O)
+  I <- nrow(O)
+  J <- ncol(O)
+  df_lr <- (I - 1) * (J - 1)
+
+  # H0 fit
+  fit0 <- try(
+    fit_structured_mnl(
+      x_fac,
+      y_fac,
+      Zdf = NULL,
+      sep = "___AE___",
+      include_gamma = FALSE
+    ),
+    silent = TRUE
+  )
+
+  # Fallback: marginal expected counts under independence
+  if (inherits(fit0, "try-error")) {
+    E0 <- compute_marginal_expected(O)
+    loc <- compute_local_tables(O, E0)
+
+    G2_ij <- matrix(0, nrow = I, ncol = J, dimnames = dimnames(O))
+    for (i in seq_len(I)) {
+      for (j in seq_len(J)) {
+        G2_ij[i, j] <- safe_g2_cell(O[i, j], E0[i, j])
+      }
+    }
+    G2 <- sum(G2_ij, na.rm = TRUE)
+    p_value <- if (df_lr > 0 && G2 >= 0) {
+      1 - stats::pchisq(G2, df = df_lr)
+    } else {
+      NA_real_
+    }
+    VL <- if (n > 0) sqrt(1 - exp(-G2 / n)) else 0
+
+    return(make_catcat_result(
+      VL = VL,
+      p_value = p_value,
+      O = O,
+      E0 = E0,
+      D = loc$D,
+      R = loc$R,
+      gamma = NULL,
+      alpha = NULL,
+      beta = NULL,
+      lambda = NULL,
+      kappa = NULL
+    ))
+  }
+
+  pi0 <- fit0$pi_hat
+  idx_w <- fit0$y_idx
+  colnames(pi0) <- fit0$W_levels
+
+  ll0 <- sum(log(pi0[cbind(seq_along(idx_w), idx_w)]))
+
+  E0 <- expected_counts_from_pi(
+    pi_hat = pi0,
+    W_levels = fit0$W_levels,
+    x_levels = levels(x_fac),
+    y_levels = levels(y_fac),
+    sep = "___AE___"
+  )
+  loc <- compute_local_tables(O, E0)
+
+  # H1 fit
+  fit1 <- try(
+    fit_structured_mnl(
+      x_fac,
+      y_fac,
+      Zdf = NULL,
+      sep = "___AE___",
+      include_gamma = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (
+    inherits(fit1, "try-error") || !identical(fit1$W_levels, fit0$W_levels)
+  ) {
+    return(make_catcat_result(
+      VL = NA_real_,
+      p_value = NA_real_,
+      O = O,
+      E0 = E0,
+      D = loc$D,
+      R = loc$R,
+      gamma = NULL,
+      alpha = NULL,
+      beta = NULL,
+      lambda = NULL,
+      kappa = NULL
+    ))
+  }
+
+  pi1 <- fit1$pi_hat
+  colnames(pi1) <- fit1$W_levels
+  pi1 <- pi1[, fit0$W_levels, drop = FALSE]
+
+  ll1 <- sum(log(pi1[cbind(seq_along(idx_w), idx_w)]))
+  lr <- compute_lr_stats(ll0, ll1, df_lr, n)
+
+  params <- fit1$params
+
+  make_catcat_result(
+    VL = lr$VL,
+    p_value = lr$p_value,
+    O = O,
+    E0 = E0,
+    D = loc$D,
+    R = loc$R,
+    gamma = params$gamma,
+    alpha = params$alpha,
+    beta = params$beta,
+    lambda = params$lambda,
+    kappa = params$kappa
+  )
+}
+
+# ----------------------------
+# Conditional cat-cat
+# ----------------------------
+
+compute_conditional <- function(x_vec, y_vec, Zdf) {
+  x_fac <- droplevels(factor(x_vec))
+  y_fac <- droplevels(factor(y_vec))
+
+  if (is.null(Zdf) || ncol(Zdf) == 0) {
+    return(compute_unconditional(x_fac, y_fac))
+  }
+
+  Z <- as.data.frame(Zdf)
+
+  ok <- stats::complete.cases(x_fac, y_fac, Z)
+  x_fac <- droplevels(x_fac[ok])
+  y_fac <- droplevels(y_fac[ok])
+  Z <- Z[ok, , drop = FALSE]
+
+  if (length(x_fac) == 0) {
+    return(make_catcat_result(
+      VL = 0,
+      p_value = NA_real_,
+      O = NULL,
+      E0 = NULL,
+      D = NULL,
+      R = NULL,
+      gamma = NULL,
+      alpha = NULL,
+      beta = NULL,
+      lambda = NULL,
+      kappa = NULL
+    ))
+  }
+
+  O <- as.matrix(table(x_fac, y_fac))
+  n <- sum(O)
+  I <- nrow(O)
+  J <- ncol(O)
+  df_lr <- (I - 1) * (J - 1)
+
+  # H0 fit
+  fit0 <- try(
+    fit_structured_mnl(
+      x_fac,
+      y_fac,
+      Zdf = Z,
+      sep = "___AE___",
+      include_gamma = FALSE
+    ),
+    silent = TRUE
+  )
+
+  # Conditional fallback -> revert to unconditional measure
+  if (inherits(fit0, "try-error")) {
+    base_res <- compute_unconditional(x_fac, y_fac)
+    return(base_res)
+  }
+
+  pi0 <- fit0$pi_hat
+  idx_w <- fit0$y_idx
+  colnames(pi0) <- fit0$W_levels
+
+  ll0 <- sum(log(pi0[cbind(seq_along(idx_w), idx_w)]))
+
+  E0 <- expected_counts_from_pi(
+    pi_hat = pi0,
+    W_levels = fit0$W_levels,
+    x_levels = levels(x_fac),
+    y_levels = levels(y_fac),
+    sep = "___AE___"
+  )
+  loc <- compute_local_tables(O, E0)
+
+  # H1 fit
+  fit1 <- try(
+    fit_structured_mnl(
+      x_fac,
+      y_fac,
+      Zdf = Z,
+      sep = "___AE___",
+      include_gamma = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (
+    inherits(fit1, "try-error") || !identical(fit1$W_levels, fit0$W_levels)
+  ) {
+    out <- make_catcat_result(
+      VL = NA_real_,
+      p_value = NA_real_,
+      O = O,
+      E0 = E0,
+      D = loc$D,
+      R = loc$R,
+      gamma = NULL,
+      alpha = NULL,
+      beta = NULL,
+      lambda = NULL,
+      kappa = NULL
+    )
+    return(out)
+  }
+
+  pi1 <- fit1$pi_hat
+  colnames(pi1) <- fit1$W_levels
+  pi1 <- pi1[, fit0$W_levels, drop = FALSE]
+
+  ll1 <- sum(log(pi1[cbind(seq_along(idx_w), idx_w)]))
+  lr <- compute_lr_stats(ll0, ll1, df_lr, n)
+
+  params <- fit1$params
+
+  out <- make_catcat_result(
+    VL = lr$VL,
+    p_value = lr$p_value,
+    O = O,
+    E0 = E0,
+    D = loc$D,
+    R = loc$R,
+    gamma = params$gamma,
+    alpha = params$alpha,
+    beta = params$beta,
+    lambda = params$lambda,
+    kappa = params$kappa
+  )
+
+  names(out)[names(out) == "VL"] <- "VL/Z"
+  out
+}
+
+# UPDATED : Function to calculate correlations and partial correlations
+# full_data: the complete dataset including control columns (passed explicitly
+#            so this function has no Shiny reactive dependencies).
+calculate_correlations <- function(
+  data,
+  threshold_num,
+  threshold_cat,
+  control_vars = NULL,
+  full_data = NULL
+) {
+  vars <- names(data)
+  n <- length(vars)
+
+  cor_matrix <- matrix(0, n, n, dimnames = list(vars, vars))
+  cor_type_matrix <- matrix("", n, n, dimnames = list(vars, vars))
+  p_matrix <- matrix(NA_real_, n, n, dimnames = list(vars, vars))
+
+  combs <- combn(vars, 2, simplify = FALSE)
+
+  has_controls <- !is.null(control_vars) && length(control_vars) > 0
+
+  for (pair in combs) {
+    v1 <- pair[1]
+    v2 <- pair[2]
+
+    is_num1 <- is.numeric(data[[v1]])
+    is_num2 <- is.numeric(data[[v2]])
+
+    cor_val <- 0
+    cor_type <- ""
+    p_val <- NA_real_ # reset for this pair
+
+    # --- Handle controls / complete cases ---
+    if (has_controls && !is.null(full_data)) {
+      complete_cases <- complete.cases(
+        full_data[[v1]],
+        full_data[[v2]],
+        full_data[, control_vars, drop = FALSE]
+      )
+      x <- full_data[[v1]][complete_cases]
+      y <- full_data[[v2]][complete_cases]
+      control_data <- full_data[complete_cases, control_vars, drop = FALSE]
+    } else {
+      complete_cases <- complete.cases(data[[v1]], data[[v2]])
+      x <- data[[v1]][complete_cases]
+      y <- data[[v2]][complete_cases]
+      control_data <- NULL
+    }
+
+    # ---------- Numeric vs numeric ----------
+    if (is_num1 && is_num2) {
+      if (length(x) > 0 && length(y) > 0) {
+        if (has_controls && !is.null(control_data)) {
+          # Partial correlation
+          tryCatch(
+            {
+              resid_x <- partial_residuals(x, control_data)
+              resid_y <- partial_residuals(y, control_data)
+              r <- cor(resid_x, resid_y, use = "complete.obs")
+
+              if (!is.na(r)) {
+                cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
+                cor_type <- "Partial r"
+
+                n_eff <- length(resid_x)
+                k_controls <- ncol(control_data)
+                p_val <- p_value_partial_cor(r, n_eff, k_controls)
+              }
+            },
+            error = function(e) {
+              # Fallback to raw Pearson's r if partial fails
+              r <- cor(x, y, use = "complete.obs")
+              if (!is.na(r)) {
+                cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
+                cor_type <- "Pearson's r"
+
+                n_eff <- length(x)
+                p_val <- p_value_partial_cor(r, n_eff, 0)
+              }
+            }
+          )
+        } else {
+          # Regular Pearson correlation
+          r <- cor(x, y, use = "complete.obs")
+          if (!is.na(r)) {
+            cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
+            cor_type <- "Pearson's r"
+
+            n_eff <- length(x)
+            p_val <- p_value_partial_cor(r, n_eff, 0)
+          }
+        }
+      }
+
+      # ---------- Categorical vs categorical (VL) ----------
+    } else if (!is_num1 && !is_num2) {
+      if (length(x) > 0 && length(y) > 0) {
+        if (has_controls && !is.null(control_data)) {
+          cor_result <- compute_conditional(
+            x_vec = x,
+            y_vec = y,
+            Zdf = control_data
+          )
+          vl_value <- cor_result[["VL/Z"]]
+          cor_type <- "VL|Z"
+        } else {
+          cor_result <- compute_unconditional(
+            x_vec = x,
+            y_vec = y
+          )
+          vl_value <- cor_result$VL
+          cor_type <- "VL"
+        }
+
+        cor_val <- ifelse(
+          !is.na(vl_value) && vl_value >= threshold_cat,
+          vl_value,
+          0
+        )
+        p_val <- cor_result$p_value
+      }
+
+      # ---------- Mixed case (numeric vs categorical) ----------
+    } else {
+      if (is_num1) {
+        num_var <- x
+        cat_var <- y
+      } else {
+        num_var <- y
+        cat_var <- x
+      }
+
+      if (length(num_var) > 0 && length(cat_var) > 0) {
+        res_eta <- calculate_partial_eta_squared_with_F(
+          num_var = num_var,
+          cat_var = cat_var,
+          control_data = if (has_controls && !is.null(control_data)) {
+            control_data
+          } else {
+            NULL
+          }
+        )
+
+        if (!is.na(res_eta$eta)) {
+          cor_val <- ifelse(res_eta$eta_sq >= threshold_num, res_eta$eta, 0)
+          cor_type <- res_eta$type
+          p_val <- res_eta$p_value
+        }
+      }
+    }
+
+    # --- Store results symmetrically ---
+    cor_matrix[v1, v2] <- cor_matrix[v2, v1] <- cor_val
+    cor_type_matrix[v1, v2] <- cor_type_matrix[v2, v1] <- cor_type
+
+    if (!is.na(p_val)) {
+      p_matrix[v1, v2] <- p_matrix[v2, v1] <- p_val
+    }
+  } # end for (pair in combs)
+
+  diag(cor_matrix) <- 1
+  cor_matrix[is.na(cor_matrix)] <- 0
+
+  diag(p_matrix) <- NA_real_
+
+  list(
+    cor_matrix = cor_matrix,
+    cor_type_matrix = cor_type_matrix,
+    p_matrix = p_matrix
+  )
+}
+
+# =============================================================================
+# Shiny server
+# =============================================================================
+
 server <- function(input, output, session) {
   data <- reactiveVal(NULL)
   var_descriptions <- reactiveVal(NULL)
-
-  # Helper to build nice reactable tables
-  make_table <- function(df, columns_defs) {
-    reactable(
-      df,
-      columns = columns_defs,
-      bordered = TRUE,
-      striped = TRUE,
-      highlight = TRUE,
-      defaultPageSize = 25,
-      showPageSizeOptions = TRUE,
-      pageSizeOptions = c(25, 50),
-      theme = reactableTheme(
-        headerStyle = list(fontWeight = "bold")
-      )
-    )
-  }
 
   # Counts visible nodes and edges
   network_summary <- reactive({
@@ -475,7 +1717,8 @@ server <- function(input, output, session) {
       selected_data,
       input$threshold_num,
       input$threshold_cat,
-      input$control_vars
+      input$control_vars,
+      full_data = if (has_controls()) data_env$full_data() else NULL
     )
   })
 
@@ -1459,1241 +2702,6 @@ server <- function(input, output, session) {
     })
     tagList(navset_card_tab(id = "bivariate_tabs", !!!tabs))
   })
-
-  # NEW : Helper: compute residuals of y after regressing on controls
-  partial_residuals <- function(y, controls_df) {
-    if (is.null(controls_df) || ncol(controls_df) == 0) {
-      return(y)
-    }
-
-    # Drop controls with no variation
-    keep <- sapply(controls_df, function(z) length(unique(z[!is.na(z)])) > 1)
-    controls_clean <- controls_df[, keep, drop = FALSE]
-
-    if (ncol(controls_clean) == 0) {
-      return(y)
-    }
-
-    dfm <- data.frame(y = y, controls_clean)
-    residuals(lm(y ~ ., data = dfm))
-  }
-
-  # NEW: Residualize a numeric outcome on controls (Y ~ Z) and return residuals
-  residualize_on_controls <- function(y, controls_df) {
-    if (is.null(controls_df) || ncol(controls_df) == 0) {
-      return(y)
-    }
-
-    # Keep controls with variation only (avoid singular fits)
-    keep <- sapply(controls_df, function(z) length(unique(z[!is.na(z)])) > 1)
-    controls_clean <- controls_df[, keep, drop = FALSE]
-    if (ncol(controls_clean) == 0) {
-      return(y)
-    }
-
-    dfm <- data.frame(y = y, controls_clean)
-    dfm <- stats::na.omit(dfm)
-    if (nrow(dfm) == 0) {
-      return(numeric(0))
-    }
-
-    fit <- try(stats::lm(y ~ ., data = dfm), silent = TRUE)
-    if (inherits(fit, "try-error")) {
-      return(numeric(0))
-    }
-
-    residuals(fit)
-  }
-
-  # NEW: Partial eta-squared with F-test and p-value
-  calculate_partial_eta_squared_with_F <- function(
-    num_var,
-    cat_var,
-    control_data = NULL
-  ) {
-    # Build initial data frame robustly
-    if (is.null(control_data) || nrow(control_data) == 0) {
-      df_temp <- data.frame(
-        num_var = num_var,
-        cat_var = as.factor(cat_var)
-      )
-    } else {
-      if (
-        length(num_var) != nrow(control_data) ||
-          length(cat_var) != nrow(control_data)
-      ) {
-        return(list(
-          eta = 0,
-          eta_sq = 0,
-          F = NA_real_,
-          df1 = 0,
-          df2 = 0,
-          p_value = NA_real_,
-          type = "sqrt(Partial Eta²)"
-        ))
-      }
-      df_temp <- data.frame(
-        num_var = num_var,
-        cat_var = as.factor(cat_var),
-        control_data
-      )
-    }
-
-    df_temp <- stats::na.omit(df_temp)
-
-    # Need some data
-    if (nrow(df_temp) == 0) {
-      return(list(
-        eta = 0,
-        eta_sq = 0,
-        F = NA_real_,
-        df1 = 0,
-        df2 = 0,
-        p_value = NA_real_,
-        type = "sqrt(Partial Eta²)"
-      ))
-    }
-
-    # Names for convenience
-    all_names <- names(df_temp)
-    response_name <- "num_var"
-    cat_name <- "cat_var"
-    control_names <- setdiff(all_names, c(response_name, cat_name))
-
-    # Check variation for all non-response variables (cat_var + controls)
-    vars_nonresp <- c(cat_name, control_names)
-
-    has_variation <- sapply(df_temp[, vars_nonresp, drop = FALSE], function(z) {
-      # For factors: require at least 2 used levels and 2 unique values
-      if (is.factor(z)) {
-        used_levels <- unique(z[!is.na(z)])
-        length(used_levels) > 1 && length(unique(z[!is.na(z)])) > 1
-      } else {
-        length(unique(z[!is.na(z)])) > 1
-      }
-    })
-
-    # If categorical predictor has no variation → nothing to test
-    if (!isTRUE(has_variation[cat_name])) {
-      return(list(
-        eta = 0,
-        eta_sq = 0,
-        F = NA_real_,
-        df1 = 0,
-        df2 = 0,
-        p_value = NA_real_,
-        type = "sqrt(Partial Eta²)"
-      ))
-    }
-
-    # Keep only controls that have variation
-    controls_kept <- control_names[has_variation[control_names]]
-
-    # Rebuild df_temp with: num_var, cat_var, and only "good" controls
-    df_temp <- df_temp[,
-      c(response_name, cat_name, controls_kept),
-      drop = FALSE
-    ]
-
-    # If num_var has no variance → nothing to explain
-    if (var(df_temp[[response_name]]) == 0) {
-      return(list(
-        eta = 0,
-        eta_sq = 0,
-        F = NA_real_,
-        df1 = 0,
-        df2 = 0,
-        p_value = NA_real_,
-        type = "sqrt(Partial Eta²)"
-      ))
-    }
-
-    # Fit models safely
-    fit_res <- try(
-      {
-        # Full model: num_var ~ cat_var + controls
-        model_full <- lm(num_var ~ ., data = df_temp)
-
-        # Reduced model:
-        #   if we have controls: num_var ~ controls
-        #   if no controls: num_var ~ 1 (intercept only)
-        if (length(controls_kept) > 0) {
-          df_reduced <- df_temp[, c(response_name, controls_kept), drop = FALSE]
-          model_reduced <- lm(num_var ~ ., data = df_reduced)
-        } else {
-          df_reduced <- df_temp[, response_name, drop = FALSE]
-          model_reduced <- lm(num_var ~ 1, data = df_reduced)
-        }
-
-        list(
-          full = model_full,
-          reduced = model_reduced
-        )
-      },
-      silent = TRUE
-    )
-
-    if (inherits(fit_res, "try-error")) {
-      # If anything weird happens in lm, fail gracefully
-      return(list(
-        eta = 0,
-        eta_sq = 0,
-        F = NA_real_,
-        df1 = 0,
-        df2 = 0,
-        p_value = NA_real_,
-        type = "sqrt(Partial Eta²)"
-      ))
-    }
-
-    model_full <- fit_res$full
-    model_reduced <- fit_res$reduced
-
-    ss_res_full <- sum(residuals(model_full)^2)
-    ss_res_reduced <- sum(residuals(model_reduced)^2)
-    ss_effect <- ss_res_reduced - ss_res_full
-
-    # df for the categorical factor (m - 1)
-    m <- nlevels(df_temp[[cat_name]])
-    q <- m - 1 # numerator df
-    df2 <- df.residual(model_full) # denominator df
-
-    if (ss_effect <= 0 || ss_res_full <= 0 || q <= 0 || df2 <= 0) {
-      return(list(
-        eta = 0,
-        eta_sq = 0,
-        F = NA_real_,
-        df1 = q,
-        df2 = df2,
-        p_value = NA_real_,
-        type = "sqrt(Partial Eta²)"
-      ))
-    }
-
-    partial_eta_sq <- ss_effect / (ss_effect + ss_res_full)
-    F_stat <- (ss_effect / q) / (ss_res_full / df2)
-    p_val <- 1 - pf(F_stat, q, df2)
-
-    list(
-      eta = sqrt(partial_eta_sq),
-      eta_sq = partial_eta_sq,
-      F = F_stat,
-      df1 = q,
-      df2 = df2,
-      p_value = p_val,
-      type = "sqrt(Partial Eta²)"
-    )
-  }
-
-  # NEW: p-value for (partial) correlation given controls
-  p_value_partial_cor <- function(r, n_eff, k_controls) {
-    # r: partial correlation
-    # n_eff: number of complete cases used
-    # k_controls: number of control variables
-    if (is.na(r)) {
-      return(NA_real_)
-    }
-    if (abs(r) >= 1) {
-      return(0)
-    } # perfect correlation
-
-    df <- n_eff - k_controls - 2
-    if (df <= 0) {
-      return(NA_real_)
-    }
-
-    t_stat <- r * sqrt(df / (1 - r^2))
-    F_stat <- t_stat^2
-    p_val <- 1 - pf(F_stat, 1, df)
-    p_val
-  }
-
-  # ============================================================
-  # Case C (cat-cat)
-  # ============================================================
-
-  # ----------------------------
-  # Helpers for cat-cat computations
-  # ----------------------------
-
-  make_Z_design <- function(Zdf) {
-    Zmm <- stats::model.matrix(~., data = Zdf) # includes intercept
-    Zmm <- Zmm[, colnames(Zmm) != "(Intercept)", drop = FALSE]
-    as.data.frame(Zmm)
-  }
-
-  get_W_levels <- function(obj) {
-    # same nesting logic for W
-    if (is.list(obj) && !is.null(obj$W)) {
-      return(obj$W)
-    }
-    if (
-      is.list(obj) &&
-        !is.null(obj$fit) &&
-        is.list(obj$fit) &&
-        !is.null(obj$fit$W)
-    ) {
-      return(obj$fit$W)
-    }
-    stop("Cannot find W inside fit object.")
-  }
-
-  build_constraints_xy <- function(
-    x_levels,
-    y_levels,
-    ref_x = x_levels[1],
-    ref_y = y_levels[1],
-    outcome_levels = NULL,
-    sep = "___AE___",
-    include_gamma = TRUE
-  ) {
-    # ---- Build full IJ outcome levels robustly ----
-    I <- length(x_levels)
-    J <- length(y_levels)
-
-    base_lab <- paste(ref_x, ref_y, sep = sep)
-
-    if (is.null(outcome_levels)) {
-      grid <- expand.grid(
-        x = as.character(x_levels),
-        y = as.character(y_levels),
-        KEEP.OUT.ATTRS = FALSE,
-        stringsAsFactors = FALSE
-      )
-      outcome_levels <- paste(grid$x, grid$y, sep = sep)
-    } else {
-      outcome_levels <- as.character(outcome_levels)
-    }
-
-    if (!(base_lab %in% outcome_levels)) {
-      stop("Baseline cell not found among outcome levels: ", base_lab)
-    }
-
-    # baseline first
-    outcome_levels <- c(base_lab, setdiff(outcome_levels, base_lab))
-
-    # ---- Parse outcome levels into (x,y) ----
-    parts <- strsplit(outcome_levels, split = sep, fixed = TRUE)
-    lens <- lengths(parts)
-    if (any(lens != 2)) {
-      bad <- outcome_levels[which(lens != 2)]
-      stop(
-        "Cannot parse W levels into (X,Y) using sep='",
-        sep,
-        "'. ",
-        "Example bad levels: ",
-        paste(utils::head(bad, 5), collapse = ", ")
-      )
-    }
-
-    x_of_k <- vapply(parts, `[[`, character(1), 1)
-    y_of_k <- vapply(parts, `[[`, character(1), 2)
-
-    # ---- logits correspond to rows 1..(K-1) excluding baseline ----
-    x_logits <- x_of_k[-1]
-    y_logits <- y_of_k[-1]
-
-    # K is the number of outcome categories we actually model
-    K <- length(outcome_levels)
-
-    if (include_gamma && K != I * J) {
-      stop(
-        "Cannot use full alpha/beta/gamma corner parametrization unless K == I*J (full grid)."
-      )
-    }
-
-    if (length(x_logits) != (K - 1) || length(y_logits) != (K - 1)) {
-      stop(
-        "Internal error: logits length mismatch.\n",
-        "K=",
-        K,
-        " so K-1=",
-        (K - 1),
-        "\n",
-        "length(x_logits)=",
-        length(x_logits),
-        " length(y_logits)=",
-        length(y_logits),
-        "\n"
-      )
-    }
-
-    # extra safety: stop early if anything is NA
-    if (anyNA(x_logits) || anyNA(y_logits)) {
-      stop(
-        "Parsed x_logits/y_logits contain NA. First few outcomes:\n",
-        paste(utils::head(outcome_levels, 10), collapse = "\n")
-      )
-    }
-
-    # ---- Intercept block: alpha + beta (+ gamma if include_gamma) ----
-    p_alpha <- I - 1
-    p_beta <- J - 1
-    p_gamma <- if (include_gamma) (I - 1) * (J - 1) else 0L
-    p0 <- p_alpha + p_beta + p_gamma
-
-    # Under H1 (include_gamma=TRUE), p0 must equal K-1.
-    # Under H0 (include_gamma=FALSE), p0 < K-1 is expected and OK.
-    if (include_gamma && p0 != (K - 1)) {
-      stop("Mismatch: with gamma, p0 must equal K-1. Check levels.")
-    }
-
-    C0 <- matrix(0, nrow = K - 1, ncol = p0)
-
-    cn <- c(
-      paste0("alpha[", setdiff(x_levels, ref_x), "]"),
-      paste0("beta[", setdiff(y_levels, ref_y), "]")
-    )
-    if (include_gamma) {
-      cn <- c(
-        cn,
-        as.vector(outer(
-          setdiff(x_levels, ref_x),
-          setdiff(y_levels, ref_y),
-          FUN = function(a, b) paste0("gamma[", a, ",", b, "]")
-        ))
-      )
-    }
-    colnames(C0) <- cn
-
-    alpha_cols <- setNames(seq_len(p_alpha), setdiff(x_levels, ref_x))
-    beta_cols <- setNames(p_alpha + seq_len(p_beta), setdiff(y_levels, ref_y))
-
-    gamma_index <- NULL
-    if (include_gamma) {
-      gamma_names <- colnames(C0)[(p_alpha + p_beta + 1):p0]
-      gamma_index <- setNames((p_alpha + p_beta + 1):p0, gamma_names)
-    }
-
-    for (r in seq_along(x_logits)) {
-      xi <- x_logits[r]
-      yj <- y_logits[r]
-
-      if (is.na(xi) || is.na(yj)) {
-        stop("NA xi/yj at r=", r, ". This should never happen.")
-      }
-
-      if (xi != ref_x) {
-        C0[r, alpha_cols[[xi]]] <- 1
-      }
-      if (yj != ref_y) {
-        C0[r, beta_cols[[yj]]] <- 1
-      }
-      if (include_gamma && xi != ref_x && yj != ref_y) {
-        gnm <- paste0("gamma[", xi, ",", yj, "]")
-        C0[r, gamma_index[[gnm]]] <- 1
-      }
-    }
-
-    # ---- Z slope block: lambda_i,k + kappa_j,k ----
-    pz <- (I - 1) + (J - 1)
-    Cz <- matrix(0, nrow = K - 1, ncol = pz)
-    colnames(Cz) <- c(
-      paste0("lambda[", setdiff(x_levels, ref_x), "]"),
-      paste0("kappa[", setdiff(y_levels, ref_y), "]")
-    )
-
-    lambda_cols <- setNames(seq_len(I - 1), setdiff(x_levels, ref_x))
-    kappa_cols <- setNames((I - 1) + seq_len(J - 1), setdiff(y_levels, ref_y))
-
-    for (r in seq_along(x_logits)) {
-      xi <- x_logits[r]
-      yj <- y_logits[r]
-      if (xi != ref_x) {
-        Cz[r, lambda_cols[[xi]]] <- 1
-      }
-      if (yj != ref_y) Cz[r, kappa_cols[[yj]]] <- 1
-    }
-
-    list(
-      outcome_levels = outcome_levels,
-      base_lab = base_lab,
-      C0 = C0,
-      Cz = Cz,
-      ref_x = ref_x,
-      ref_y = ref_y,
-      sep = sep,
-      x_levels = x_levels,
-      y_levels = y_levels,
-      include_gamma = include_gamma
-    )
-  }
-
-  # ----------------------------
-  # Manual structured multinomial logit via optim()
-  # ----------------------------
-
-  softmax_rows <- function(eta) {
-    # eta: n x K matrix
-    m <- apply(eta, 1, max)
-    ex <- exp(eta - m)
-    ex / rowSums(ex)
-  }
-
-  # Build mapping from each joint category w = (x_i, y_j) to indices i, j
-  parse_W_levels <- function(W_levels, sep, x_levels, y_levels) {
-    parts <- strsplit(W_levels, split = sep, fixed = TRUE)
-    wx <- vapply(parts, `[[`, "", 1)
-    wy <- vapply(parts, `[[`, "", 2)
-
-    # validate
-    if (any(!wx %in% x_levels) || any(!wy %in% y_levels)) {
-      stop(
-        "Some W levels cannot be mapped back to x_levels/y_levels. Check sep and factor labels."
-      )
-    }
-
-    i_idx <- match(wx, x_levels)
-    j_idx <- match(wy, y_levels)
-    list(wx = wx, wy = wy, i = i_idx, j = j_idx)
-  }
-
-  # Pack/unpack theta for H1 and H0
-  # Baseline constraints: alpha[ref_x]=0, beta[ref_y]=0, gamma[ref_x,*]=0, gamma[*,ref_y]=0
-  make_param_index <- function(I, J, q, include_gamma = TRUE) {
-    # free alpha: I-1, free beta: J-1
-    # free gamma: (I-1)(J-1) if include_gamma else 0
-    # free lambda: (I-1)*q, free kappa: (J-1)*q
-    p_alpha <- I - 1
-    p_beta <- J - 1
-    p_gamma <- if (include_gamma) (I - 1) * (J - 1) else 0L
-    p_lambda <- (I - 1) * q
-    p_kappa <- (J - 1) * q
-
-    list(
-      p_alpha = p_alpha,
-      p_beta = p_beta,
-      p_gamma = p_gamma,
-      p_lambda = p_lambda,
-      p_kappa = p_kappa,
-      p_total = p_alpha + p_beta + p_gamma + p_lambda + p_kappa
-    )
-  }
-
-  unpack_theta <- function(theta, I, J, q, include_gamma = TRUE) {
-    idx <- make_param_index(I, J, q, include_gamma)
-    stopifnot(length(theta) == idx$p_total)
-
-    pos <- 1
-    take <- function(k) {
-      out <- theta[pos:(pos + k - 1)]
-      pos <<- pos + k
-      out
-    }
-
-    alpha_free <- take(idx$p_alpha) # length I-1
-    beta_free <- take(idx$p_beta) # length J-1
-    gamma_free <- if (include_gamma) take(idx$p_gamma) else numeric(0)
-    lambda_free <- take(idx$p_lambda) # length (I-1)*q
-    kappa_free <- take(idx$p_kappa) # length (J-1)*q
-
-    # Expand into full arrays with baseline = 0
-    alpha <- c(0, alpha_free) # length I  (assumes ref_x is first level)
-    beta <- c(0, beta_free) # length J  (assumes ref_y is first level)
-
-    gamma <- matrix(0, nrow = I, ncol = J)
-    if (include_gamma) {
-      # fill only rows 2..I and cols 2..J (corner constraints)
-      gamma[2:I, 2:J] <- matrix(
-        gamma_free,
-        nrow = I - 1,
-        ncol = J - 1,
-        byrow = FALSE
-      )
-    }
-
-    lambda <- matrix(0, nrow = I, ncol = q)
-    kappa <- matrix(0, nrow = J, ncol = q)
-    if (q > 0) {
-      lambda[2:I, ] <- matrix(
-        lambda_free,
-        nrow = I - 1,
-        ncol = q,
-        byrow = FALSE
-      )
-      kappa[2:J, ] <- matrix(kappa_free, nrow = J - 1, ncol = q, byrow = FALSE)
-    }
-
-    list(
-      alpha = alpha,
-      beta = beta,
-      gamma = gamma,
-      lambda = lambda,
-      kappa = kappa
-    )
-  }
-
-  # Compute eta (n x K) for all joint outcomes in W_levels
-  compute_eta <- function(pars, mapW, Zmm, n_obs) {
-    # mapW$i, mapW$j are length K vectors
-    K <- length(mapW$i)
-    q <- if (is.null(Zmm)) 0L else ncol(Zmm)
-
-    eta <- matrix(0, nrow = n_obs, ncol = K)
-
-    # intercept part per category k
-    base_cat <- pars$alpha[mapW$i] +
-      pars$beta[mapW$j] +
-      pars$gamma[cbind(mapW$i, mapW$j)]
-    eta <- eta + matrix(base_cat, nrow = n_obs, ncol = K, byrow = TRUE)
-
-    # Z slopes
-    if (q > 0) {
-      slope_mat <- matrix(0, nrow = K, ncol = q)
-      for (k in seq_len(K)) {
-        slope_mat[k, ] <- pars$lambda[mapW$i[k], ] + pars$kappa[mapW$j[k], ]
-      }
-      eta <- eta + Zmm %*% t(slope_mat)
-    }
-
-    eta
-  }
-
-  # Fit structured multinomial with optim; returns fitted pi and params
-  fit_structured_mnl <- function(
-    x_fac,
-    y_fac,
-    Zdf = NULL,
-    sep = "___AE___",
-    include_gamma = TRUE
-  ) {
-    x_fac <- droplevels(factor(x_fac))
-    y_fac <- droplevels(factor(y_fac))
-
-    ok <- if (is.null(Zdf) || ncol(Zdf) == 0) {
-      stats::complete.cases(x_fac, y_fac)
-    } else {
-      stats::complete.cases(x_fac, y_fac, Zdf)
-    }
-
-    x_fac <- droplevels(x_fac[ok])
-    y_fac <- droplevels(y_fac[ok])
-    if (!is.null(Zdf) && ncol(Zdf) > 0) {
-      Zdf <- Zdf[ok, , drop = FALSE]
-    }
-
-    x_levels <- levels(x_fac)
-    y_levels <- levels(y_fac)
-    I <- length(x_levels)
-    J <- length(y_levels)
-
-    # joint outcome on FULL support (all I*J combinations, including zero-count cells)
-    grid <- expand.grid(
-      x = as.character(x_levels),
-      y = as.character(y_levels),
-      KEEP.OUT.ATTRS = FALSE,
-      stringsAsFactors = FALSE
-    )
-    W_levels <- paste(grid$x, grid$y, sep = sep)
-    K <- length(W_levels) # should be I * J
-
-    # observed outcome labels, mapped into the full-support W_levels
-    W_obs_labels <- paste(as.character(x_fac), as.character(y_fac), sep = sep)
-    y_idx_local <- match(W_obs_labels, W_levels)
-
-    if (anyNA(y_idx_local)) {
-      stop("Some observed (X,Y) pairs could not be matched to full W_levels.")
-    }
-
-    # Z design
-    Zmm <- NULL
-    if (!is.null(Zdf) && ncol(Zdf) > 0) {
-      Zmm <- as.matrix(make_Z_design(as.data.frame(Zdf)))
-    }
-    q <- if (is.null(Zmm)) 0L else ncol(Zmm)
-
-    mapW <- parse_W_levels(W_levels, sep, x_levels, y_levels)
-
-    idx <- make_param_index(I, J, q, include_gamma)
-    theta0 <- rep(0, idx$p_total)
-
-    negloglik <- function(theta) {
-      pars <- unpack_theta(theta, I, J, q, include_gamma)
-      eta <- compute_eta(pars, mapW, Zmm, n_obs = length(y_idx_local))
-      pi <- softmax_rows(eta)
-
-      p_obs <- pi[cbind(seq_len(nrow(pi)), y_idx_local)]
-      if (any(!is.finite(p_obs)) || any(p_obs <= 0)) {
-        return(1e12)
-      }
-      -sum(log(p_obs))
-    }
-
-    fit <- stats::optim(
-      par = theta0,
-      fn = negloglik,
-      method = "BFGS",
-      control = list(maxit = 1000, reltol = 1e-8)
-    )
-
-    pars_hat <- unpack_theta(fit$par, I, J, q, include_gamma)
-    eta_hat <- compute_eta(pars_hat, mapW, Zmm, n_obs = length(y_idx_local))
-    pi_hat <- softmax_rows(eta_hat)
-
-    list(
-      fit = fit,
-      pi_hat = pi_hat,
-      y_idx = y_idx_local,
-      W_obs_labels = W_obs_labels,
-      W_levels = W_levels,
-      x_levels = x_levels,
-      y_levels = y_levels,
-      params = pars_hat
-    )
-  }
-
-  expected_counts_from_pi <- function(
-    pi_hat,
-    W_levels,
-    x_levels,
-    y_levels,
-    sep = "___AE___"
-  ) {
-    I <- length(x_levels)
-    J <- length(y_levels)
-    E <- matrix(0, nrow = I, ncol = J, dimnames = list(x_levels, y_levels))
-
-    parts <- strsplit(W_levels, split = sep, fixed = TRUE)
-    wx <- vapply(parts, `[[`, "", 1)
-    wy <- vapply(parts, `[[`, "", 2)
-
-    col_sums <- colSums(pi_hat)
-    for (k in seq_along(W_levels)) {
-      E[wx[k], wy[k]] <- col_sums[k]
-    }
-    E
-  }
-
-  safe_pearson_cell <- function(O, E) {
-    if (is.na(O) || is.na(E) || E <= 0) {
-      return(NA_real_)
-    }
-    (O - E) / sqrt(E)
-  }
-
-  # ----------------------------
-  # Helpers for cat-cat outputs
-  # ----------------------------
-
-  make_catcat_result <- function(
-    VL = NA_real_,
-    p_value = NA_real_,
-    O = NULL,
-    E0 = NULL,
-    D = NULL,
-    R = NULL,
-    gamma = NULL,
-    alpha = NULL,
-    beta = NULL,
-    lambda = NULL,
-    kappa = NULL
-  ) {
-    list(
-      VL = VL,
-      p_value = p_value,
-      O = O,
-      E0 = E0,
-      D = D,
-      R = R,
-      gamma = gamma,
-      alpha = alpha,
-      beta = beta,
-      lambda = lambda,
-      kappa = kappa
-    )
-  }
-
-  compute_local_tables <- function(O, E0) {
-    D <- O - E0
-
-    R <- matrix(
-      NA_real_,
-      nrow = nrow(O),
-      ncol = ncol(O),
-      dimnames = dimnames(O)
-    )
-
-    for (i in seq_len(nrow(O))) {
-      for (j in seq_len(ncol(O))) {
-        R[i, j] <- safe_pearson_cell(O[i, j], E0[i, j])
-      }
-    }
-
-    list(D = D, R = R)
-  }
-
-  compute_lr_stats <- function(ll0, ll1, df, n) {
-    G2 <- 2 * (ll1 - ll0)
-    p_value <- if (df > 0 && is.finite(G2) && G2 >= 0) {
-      1 - stats::pchisq(G2, df = df)
-    } else {
-      NA_real_
-    }
-    VL <- if (n > 0 && is.finite(G2)) sqrt(1 - exp(-G2 / n)) else NA_real_
-
-    list(G2 = G2, p_value = p_value, VL = VL)
-  }
-
-  compute_marginal_expected <- function(O) {
-    n <- sum(O)
-    outer(rowSums(O), colSums(O)) / n
-  }
-
-  # ----------------------------
-  # Unconditional cat-cat
-  # ----------------------------
-
-  compute_unconditional <- function(x_vec, y_vec) {
-    x_fac <- droplevels(factor(x_vec))
-    y_fac <- droplevels(factor(y_vec))
-
-    ok <- stats::complete.cases(x_fac, y_fac)
-    x_fac <- droplevels(x_fac[ok])
-    y_fac <- droplevels(y_fac[ok])
-
-    if (length(x_fac) == 0) {
-      return(make_catcat_result(
-        VL = 0,
-        p_value = NA_real_,
-        O = NULL,
-        E0 = NULL,
-        D = NULL,
-        R = NULL,
-        gamma = NULL,
-        alpha = NULL,
-        beta = NULL,
-        lambda = NULL,
-        kappa = NULL
-      ))
-    }
-
-    O <- as.matrix(table(x_fac, y_fac))
-    n <- sum(O)
-    I <- nrow(O)
-    J <- ncol(O)
-    df_lr <- (I - 1) * (J - 1)
-
-    # H0 fit
-    fit0 <- try(
-      fit_structured_mnl(
-        x_fac,
-        y_fac,
-        Zdf = NULL,
-        sep = "___AE___",
-        include_gamma = FALSE
-      ),
-      silent = TRUE
-    )
-
-    # Fallback: marginal expected counts under independence
-    if (inherits(fit0, "try-error")) {
-      E0 <- compute_marginal_expected(O)
-      loc <- compute_local_tables(O, E0)
-
-      G2_ij <- matrix(0, nrow = I, ncol = J, dimnames = dimnames(O))
-      for (i in seq_len(I)) {
-        for (j in seq_len(J)) {
-          G2_ij[i, j] <- safe_g2_cell(O[i, j], E0[i, j])
-        }
-      }
-      G2 <- sum(G2_ij, na.rm = TRUE)
-      p_value <- if (df_lr > 0 && G2 >= 0) {
-        1 - stats::pchisq(G2, df = df_lr)
-      } else {
-        NA_real_
-      }
-      VL <- if (n > 0) sqrt(1 - exp(-G2 / n)) else 0
-
-      return(make_catcat_result(
-        VL = VL,
-        p_value = p_value,
-        O = O,
-        E0 = E0,
-        D = loc$D,
-        R = loc$R,
-        gamma = NULL,
-        alpha = NULL,
-        beta = NULL,
-        lambda = NULL,
-        kappa = NULL
-      ))
-    }
-
-    pi0 <- fit0$pi_hat
-    idx_w <- fit0$y_idx
-    colnames(pi0) <- fit0$W_levels
-
-    ll0 <- sum(log(pi0[cbind(seq_along(idx_w), idx_w)]))
-
-    E0 <- expected_counts_from_pi(
-      pi_hat = pi0,
-      W_levels = fit0$W_levels,
-      x_levels = levels(x_fac),
-      y_levels = levels(y_fac),
-      sep = "___AE___"
-    )
-    loc <- compute_local_tables(O, E0)
-
-    # H1 fit
-    fit1 <- try(
-      fit_structured_mnl(
-        x_fac,
-        y_fac,
-        Zdf = NULL,
-        sep = "___AE___",
-        include_gamma = TRUE
-      ),
-      silent = TRUE
-    )
-
-    if (
-      inherits(fit1, "try-error") || !identical(fit1$W_levels, fit0$W_levels)
-    ) {
-      return(make_catcat_result(
-        VL = NA_real_,
-        p_value = NA_real_,
-        O = O,
-        E0 = E0,
-        D = loc$D,
-        R = loc$R,
-        gamma = NULL,
-        alpha = NULL,
-        beta = NULL,
-        lambda = NULL,
-        kappa = NULL
-      ))
-    }
-
-    pi1 <- fit1$pi_hat
-    colnames(pi1) <- fit1$W_levels
-    pi1 <- pi1[, fit0$W_levels, drop = FALSE]
-
-    ll1 <- sum(log(pi1[cbind(seq_along(idx_w), idx_w)]))
-    lr <- compute_lr_stats(ll0, ll1, df_lr, n)
-
-    params <- fit1$params
-
-    make_catcat_result(
-      VL = lr$VL,
-      p_value = lr$p_value,
-      O = O,
-      E0 = E0,
-      D = loc$D,
-      R = loc$R,
-      gamma = params$gamma,
-      alpha = params$alpha,
-      beta = params$beta,
-      lambda = params$lambda,
-      kappa = params$kappa
-    )
-  }
-
-  # ----------------------------
-  # Conditional cat-cat
-  # ----------------------------
-
-  compute_conditional <- function(x_vec, y_vec, Zdf) {
-    x_fac <- droplevels(factor(x_vec))
-    y_fac <- droplevels(factor(y_vec))
-
-    if (is.null(Zdf) || ncol(Zdf) == 0) {
-      return(compute_unconditional(x_fac, y_fac))
-    }
-
-    Z <- as.data.frame(Zdf)
-
-    ok <- stats::complete.cases(x_fac, y_fac, Z)
-    x_fac <- droplevels(x_fac[ok])
-    y_fac <- droplevels(y_fac[ok])
-    Z <- Z[ok, , drop = FALSE]
-
-    if (length(x_fac) == 0) {
-      return(make_catcat_result(
-        VL = 0,
-        p_value = NA_real_,
-        O = NULL,
-        E0 = NULL,
-        D = NULL,
-        R = NULL,
-        gamma = NULL,
-        alpha = NULL,
-        beta = NULL,
-        lambda = NULL,
-        kappa = NULL
-      ))
-    }
-
-    O <- as.matrix(table(x_fac, y_fac))
-    n <- sum(O)
-    I <- nrow(O)
-    J <- ncol(O)
-    df_lr <- (I - 1) * (J - 1)
-
-    # H0 fit
-    fit0 <- try(
-      fit_structured_mnl(
-        x_fac,
-        y_fac,
-        Zdf = Z,
-        sep = "___AE___",
-        include_gamma = FALSE
-      ),
-      silent = TRUE
-    )
-
-    # Conditional fallback -> revert to unconditional measure
-    if (inherits(fit0, "try-error")) {
-      base_res <- compute_unconditional(x_fac, y_fac)
-      return(base_res)
-    }
-
-    pi0 <- fit0$pi_hat
-    idx_w <- fit0$y_idx
-    colnames(pi0) <- fit0$W_levels
-
-    ll0 <- sum(log(pi0[cbind(seq_along(idx_w), idx_w)]))
-
-    E0 <- expected_counts_from_pi(
-      pi_hat = pi0,
-      W_levels = fit0$W_levels,
-      x_levels = levels(x_fac),
-      y_levels = levels(y_fac),
-      sep = "___AE___"
-    )
-    loc <- compute_local_tables(O, E0)
-
-    # H1 fit
-    fit1 <- try(
-      fit_structured_mnl(
-        x_fac,
-        y_fac,
-        Zdf = Z,
-        sep = "___AE___",
-        include_gamma = TRUE
-      ),
-      silent = TRUE
-    )
-
-    if (
-      inherits(fit1, "try-error") || !identical(fit1$W_levels, fit0$W_levels)
-    ) {
-      out <- make_catcat_result(
-        VL = NA_real_,
-        p_value = NA_real_,
-        O = O,
-        E0 = E0,
-        D = loc$D,
-        R = loc$R,
-        gamma = NULL,
-        alpha = NULL,
-        beta = NULL,
-        lambda = NULL,
-        kappa = NULL
-      )
-      return(out)
-    }
-
-    pi1 <- fit1$pi_hat
-    colnames(pi1) <- fit1$W_levels
-    pi1 <- pi1[, fit0$W_levels, drop = FALSE]
-
-    ll1 <- sum(log(pi1[cbind(seq_along(idx_w), idx_w)]))
-    lr <- compute_lr_stats(ll0, ll1, df_lr, n)
-
-    params <- fit1$params
-
-    out <- make_catcat_result(
-      VL = lr$VL,
-      p_value = lr$p_value,
-      O = O,
-      E0 = E0,
-      D = loc$D,
-      R = loc$R,
-      gamma = params$gamma,
-      alpha = params$alpha,
-      beta = params$beta,
-      lambda = params$lambda,
-      kappa = params$kappa
-    )
-
-    names(out)[names(out) == "VL"] <- "VL/Z"
-    out
-  }
-
-  # UPDATED : Function to calculate correlations and partial correlations
-  calculate_correlations <- function(
-    data,
-    threshold_num,
-    threshold_cat,
-    control_vars = NULL
-  ) {
-    vars <- names(data)
-    n <- length(vars)
-
-    cor_matrix <- matrix(0, n, n, dimnames = list(vars, vars))
-    cor_type_matrix <- matrix("", n, n, dimnames = list(vars, vars))
-    p_matrix <- matrix(NA_real_, n, n, dimnames = list(vars, vars))
-
-    combs <- combn(vars, 2, simplify = FALSE)
-
-    has_controls <- !is.null(control_vars) && length(control_vars) > 0
-
-    # Get the full dataset with controls if needed
-    full_data <- NULL
-    if (has_controls) {
-      full_data <- data_env$full_data()
-    }
-
-    for (pair in combs) {
-      v1 <- pair[1]
-      v2 <- pair[2]
-
-      is_num1 <- is.numeric(data[[v1]])
-      is_num2 <- is.numeric(data[[v2]])
-
-      cor_val <- 0
-      cor_type <- ""
-      p_val <- NA_real_ # reset for this pair
-
-      # --- Handle controls / complete cases ---
-      if (has_controls && !is.null(full_data)) {
-        complete_cases <- complete.cases(
-          full_data[[v1]],
-          full_data[[v2]],
-          full_data[, control_vars, drop = FALSE]
-        )
-        x <- full_data[[v1]][complete_cases]
-        y <- full_data[[v2]][complete_cases]
-        control_data <- full_data[complete_cases, control_vars, drop = FALSE]
-      } else {
-        complete_cases <- complete.cases(data[[v1]], data[[v2]])
-        x <- data[[v1]][complete_cases]
-        y <- data[[v2]][complete_cases]
-        control_data <- NULL
-      }
-
-      # ---------- Numeric vs numeric ----------
-      if (is_num1 && is_num2) {
-        if (length(x) > 0 && length(y) > 0) {
-          if (has_controls && !is.null(control_data)) {
-            # Partial correlation
-            tryCatch(
-              {
-                resid_x <- partial_residuals(x, control_data)
-                resid_y <- partial_residuals(y, control_data)
-                r <- cor(resid_x, resid_y, use = "complete.obs")
-
-                if (!is.na(r)) {
-                  cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
-                  cor_type <- "Partial r"
-
-                  n_eff <- length(resid_x)
-                  k_controls <- ncol(control_data)
-                  p_val <- p_value_partial_cor(r, n_eff, k_controls)
-                }
-              },
-              error = function(e) {
-                # Fallback to raw Pearson's r if partial fails
-                r <- cor(x, y, use = "complete.obs")
-                if (!is.na(r)) {
-                  cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
-                  cor_type <- "Pearson's r"
-
-                  n_eff <- length(x)
-                  p_val <- p_value_partial_cor(r, n_eff, 0)
-                }
-              }
-            )
-          } else {
-            # Regular Pearson correlation
-            r <- cor(x, y, use = "complete.obs")
-            if (!is.na(r)) {
-              cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
-              cor_type <- "Pearson's r"
-
-              n_eff <- length(x)
-              p_val <- p_value_partial_cor(r, n_eff, 0)
-            }
-          }
-        }
-
-        # ---------- Categorical vs categorical (VL) ----------
-      } else if (!is_num1 && !is_num2) {
-        if (length(x) > 0 && length(y) > 0) {
-          if (has_controls && !is.null(control_data)) {
-            cor_result <- compute_conditional(
-              x_vec = x,
-              y_vec = y,
-              Zdf = control_data
-            )
-            vl_value <- cor_result[["VL/Z"]]
-            cor_type <- "VL|Z"
-          } else {
-            cor_result <- compute_unconditional(
-              x_vec = x,
-              y_vec = y
-            )
-            vl_value <- cor_result$VL
-            cor_type <- "VL"
-          }
-
-          cor_val <- ifelse(
-            !is.na(vl_value) && vl_value >= threshold_cat,
-            vl_value,
-            0
-          )
-          p_val <- cor_result$p_value
-        }
-
-        # ---------- Mixed case (numeric vs categorical) ----------
-      } else {
-        if (is_num1) {
-          num_var <- x
-          cat_var <- y
-        } else {
-          num_var <- y
-          cat_var <- x
-        }
-
-        if (length(num_var) > 0 && length(cat_var) > 0) {
-          res_eta <- calculate_partial_eta_squared_with_F(
-            num_var = num_var,
-            cat_var = cat_var,
-            control_data = if (has_controls && !is.null(control_data)) {
-              control_data
-            } else {
-              NULL
-            }
-          )
-
-          if (!is.na(res_eta$eta)) {
-            cor_val <- ifelse(res_eta$eta_sq >= threshold_num, res_eta$eta, 0)
-            cor_type <- res_eta$type
-            p_val <- res_eta$p_value
-          }
-        }
-      }
-
-      # --- Store results symmetrically ---
-      cor_matrix[v1, v2] <- cor_matrix[v2, v1] <- cor_val
-      cor_type_matrix[v1, v2] <- cor_type_matrix[v2, v1] <- cor_type
-
-      if (!is.na(p_val)) {
-        p_matrix[v1, v2] <- p_matrix[v2, v1] <- p_val
-      }
-    } # end for (pair in combs)
-
-    diag(cor_matrix) <- 1
-    cor_matrix[is.na(cor_matrix)] <- 0
-
-    diag(p_matrix) <- NA_real_
-
-    list(
-      cor_matrix = cor_matrix,
-      cor_type_matrix = cor_type_matrix,
-      p_matrix = p_matrix
-    )
-  }
 
 }
 

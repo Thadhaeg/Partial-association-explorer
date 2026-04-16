@@ -65,7 +65,7 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 **Structural issues**
 
-- ✓ All server logic, including substantial statistical helper functions (`fit_structured_mnl`, `unpack_theta`, `compute_eta`, `softmax_rows`, `compute_lr_stats`, etc.), is defined *inside* the `server()` function. This makes the file difficult to navigate (it is over 1400 lines long) and prevents unit testing. Move pure statistical functions to a separate `R/` directory or at minimum to the top-level scope outside `server()`.
+- ~~✓ All server logic, including substantial statistical helper functions (`fit_structured_mnl`, `unpack_theta`, `compute_eta`, `softmax_rows`, `compute_lr_stats`, etc.), is defined *inside* the `server()` function. This makes the file difficult to navigate (it is over 1400 lines long) and prevents unit testing. Move pure statistical functions to a separate `R/` directory or at minimum to the top-level scope outside `server()`.~~ *(Done: all pure statistical helpers — `make_table`, `partial_residuals`, `residualize_on_controls`, `calculate_partial_eta_squared_with_F`, `p_value_partial_cor`, `make_Z_design`, `get_W_levels`, `build_constraints_xy`, `softmax_rows`, `parse_W_levels`, `make_param_index`, `unpack_theta`, `compute_eta`, `fit_structured_mnl`, `expected_counts_from_pi`, `safe_pearson_cell`, `make_catcat_result`, `compute_local_tables`, `compute_lr_stats`, `compute_marginal_expected`, `compute_unconditional`, `compute_conditional`, `calculate_correlations` — moved to the top-level scope before `server()`. `calculate_correlations` was refactored to accept `full_data` as an explicit parameter instead of reaching into `data_env$full_data()`, eliminating its only Shiny reactive dependency.)*
 
 - ✓ The main pairs-plot rendering block (`output$pairs_plot <- renderUI`) is very long (approx. 350 lines) with deeply nested `if/else` trees. Refactoring each variable-type case into its own named function (e.g., `render_numnum_plot()`, `render_catcat_plot()`, `render_mixed_plot()`) would substantially improve readability.
 
@@ -249,7 +249,7 @@ The following items are ordered by urgency for the meeting.
 
 ### Medium priority (code quality and robustness)
 
-10. **Move statistical helpers outside `server()`** to enable unit testing and improve readability.
+10. ~~**Move statistical helpers outside `server()`** to enable unit testing and improve readability.~~ *(Done: all pure helpers moved to top-level scope; `calculate_correlations` refactored to accept `full_data` as a parameter.)*
 
 11. ~~**Fix the `data_env$full_data` reactivity pattern**: replace with a standard `reactiveVal()` at server scope.~~ *(Removed: this pattern is functional — see Section 1.3 correction. Refactoring is still a style improvement but not a bug fix.)*
 
