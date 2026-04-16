@@ -75,7 +75,7 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 **Minor quality issues**
 
-- ✓ `cat("Button", button_id, "clicked!...\n")` (`app.r:729-735`) and `cat("Partial correlation failed:", ...)` (`app.r:892`) debug print statements are left in production code. Remove them or replace with `message()`.
+- ~~✓ `cat("Button", button_id, "clicked!...\n")` (`app.r:729-735`) and `cat("Partial correlation failed:", ...)` (`app.r:892`) debug print statements are left in production code. Remove them or replace with `message()`.~~ *(Done: both `cat()` calls removed.)*
 
 - ~~✓ The function `find_optimal_submatrix()` and `find_optimal_submatrix_heuristic()` are defined inside the server but are only called from `build_contingency_table()`, which is itself never called anywhere in the app.~~ *(Done: all three functions moved to `archive.r`.)*
 
@@ -261,7 +261,7 @@ The following items are ordered by urgency for the meeting.
 
 ### Lower priority (polish)
 
-15. Remove debug `cat()` calls from production code (lines 729-735, 892).
+15. ~~Remove debug `cat()` calls from production code (lines 729-735, 892).~~ *(Done.)*
 16. Add a worked example to the paper/vignette.
 17. Add in-text citation to Cox and Snell (1989) at the definition of VL (`Association_explorer_methods.tex:434`).
 18. Trim reference rows/columns from the displayed gamma table in the cat-cat pair plots (`app.r:1155`).

@@ -1966,13 +1966,6 @@ server <- function(input, output, session) {
                 } else {
                   !current_state
                 }
-                cat(
-                  "Button",
-                  button_id,
-                  "clicked! New state:",
-                  reversed_axes[[plot_id]],
-                  "\n"
-                )
               },
               ignoreInit = TRUE
             )
@@ -2129,7 +2122,6 @@ server <- function(input, output, session) {
               },
               error = function(e) {
                 # Fallback to regular scatter plot if partial correlation fails
-                cat("Partial correlation failed:", e$message, "\n")
                 current_cor <- if (nrow(plot_data) > 0) {
                   cor(plot_data[[v1]], plot_data[[v2]], use = "complete.obs")
                 } else {
