@@ -227,7 +227,7 @@ The following items are ordered by urgency.
 
 2. ~~**Add an open-source license** to the repository (`LICENSE` file).~~ *(Done: MIT License added to the repository root.)* **Remaining action**: declare the license (MIT, SPDX: `MIT`) in the SoftwareX metadata table and in the paper.
 
-3. ~~**Fix `compute_conditional()` fallback**: ensure the returned list uses `VL/Z` (or better, `VL_Z`) consistently, including in **all three** fallback paths, so the association matrix never receives a silent `NULL`.~~ *(Done: `names(res)[names(res) == "VL"] <- "VL/Z"` added before the `return()` in all three paths: empty-Zdf, `fit0` failure, and `fit1` failure.)*
+3. ~~**Fix `compute_conditional()` fallback**: ensure the returned list uses `VL/Z` (or better, `VL_Z`) consistently, including in **all three** fallback paths, so the association matrix never receives a silent `NULL`.~~ *(Done: all four paths now rename `VL` → `VL_Z` before returning: empty-Zdf (ncol == 0), empty complete-cases after filtering (length(x_fac) == 0 post-Z filtering), `fit0` failure, and `fit1` failure.)*
 
 4. ~~**Check `optim()` convergence**: inspect `fit$convergence` after each call to `fit_structured_mnl()` and surface a warning when it is non-zero.~~ *(Done: `warning()` added in `fit_structured_mnl()` when `fit$convergence != 0`, reporting the convergence code and table dimensions.)*
 

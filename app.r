@@ -1205,7 +1205,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
   Z <- Z[ok, , drop = FALSE]
 
   if (length(x_fac) == 0) {
-    return(make_catcat_result(
+    out <- make_catcat_result(
       VL = 0,
       p_value = NA_real_,
       O = NULL,
@@ -1217,7 +1217,9 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
       beta = NULL,
       lambda = NULL,
       kappa = NULL
-    ))
+    )
+    names(out)[names(out) == "VL"] <- "VL_Z"
+    return(out)
   }
 
   O <- as.matrix(table(x_fac, y_fac))
