@@ -175,7 +175,7 @@ The current draft is a pure methods paper (a LaTeX article class document with s
 
 - **Degrees of freedom for VL test**: the text states df = (I-1)(J-1) for the LR test, which is correct for the unconditional case. For the conditional case the same df is used, which is also correct (the gamma interaction block has (I-1)(J-1) free parameters regardless of Z). This could be stated more explicitly.
 
-- ✓ **Missing reference**: The VL measure `sqrt(1 - exp(-G2/n))` derives from the transformation described in Cox and Snell (1989) and is related to Nagelkerke's R2. The paper lists Cox and Snell (1989) in the references (`Association_explorer_methods.tex:696`) but there is no `\cite` command in the body text at or near the VL definition (`Association_explorer_methods.tex:434`). Add an in-text citation at the definition of VL.
+- ~~✓ **Missing reference**: The VL measure `sqrt(1 - exp(-G2/n))` derives from the transformation described in Cox and Snell (1989) and is related to Nagelkerke's R2. The paper lists Cox and Snell (1989) in the references (`Association_explorer_methods.tex:696`) but there is no `\cite` command in the body text at or near the VL definition (`Association_explorer_methods.tex:434`). Add an in-text citation at the definition of VL.~~ *(Done: inline citation added.)*
 
 ### 2.3 Accuracy
 
@@ -263,6 +263,6 @@ The following items are ordered by urgency for the meeting.
 
 15. ~~Remove debug `cat()` calls from production code (lines 729-735, 892).~~ *(Done.)*
 16. Add a worked example to the paper/vignette.
-17. Add in-text citation to Cox and Snell (1989) at the definition of VL (`Association_explorer_methods.tex:434`).
+17. ~~Add in-text citation to Cox and Snell (1989) at the definition of VL (`Association_explorer_methods.tex:434`).~~ *(Done: `(Cox \& Snell, 1989)` added inline after the formula, consistent with the paper's author-year reference style.)*
 18. Trim reference rows/columns from the displayed gamma table in the cat-cat pair plots (`app.r:1155`).
 19. ~~Clarify the slider label "R²" to read "R² / η² threshold" for mixed pairs (`app.r:108`).~~ *(Done: label updated to `"Threshold for Quantitative-Quantitative and Quantitative-Categorical Associations (R² / η²)"`.)*
