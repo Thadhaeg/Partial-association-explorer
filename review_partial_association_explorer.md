@@ -219,7 +219,7 @@ For a SoftwareX article, the software description section must cover the app's m
 
 ## 4. Priority Action List
 
-The following items are ordered by urgency for the meeting.
+The following items are ordered by urgency.
 
 ### Critical (must fix before any public release or submission)
 
