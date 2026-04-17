@@ -35,7 +35,7 @@ The approach uses a custom structured multinomial logit fitted via `optim()` (BF
 
 - ✓ `optim()` with `method = "BFGS"` has no guarantee of finding the global optimum, especially for larger contingency tables. ~~There is no convergence check: `fit$convergence` is never inspected anywhere in the file.~~ *(Done: convergence check added — see priority item 4.)* A non-converged fit still propagates to `ll1`; the `compute_lr_stats()` guard against negative `G2` remains the safety net for downstream computation.
 
-- ✓ `safe_g2_cell()` is referenced inside the fallback path in `compute_unconditional()` (`app.r:2299`) but is **never defined** anywhere in the file. If `fit0` fails for any contingency table, the fallback will throw a `could not find function "safe_g2_cell"` error. This is a definite bug.
+- ~~✓ `safe_g2_cell()` is referenced inside the fallback path in `compute_unconditional()` but is **never defined** anywhere in the file. If `fit0` fails for any contingency table, the fallback will throw a `could not find function "safe_g2_cell"` error. This is a definite bug.~~ *(Done: function defined — see priority item 1.)*
 
 - ✓ In `compute_conditional()`, the result list renames `VL` to `VL/Z` at the very end (`app.r:2522`). Downstream code accesses `cor_result[["VL/Z"]]` (`app.r:2632`) in the pairs plot and `vl_value <- assoc_res[["VL/Z"]]` (`app.r:1078`) in the correlation matrix. This is consistent but brittle; a slash in a list name is legal in R but unusual and easy to break. Rename it to something like `VL_Z` throughout.
 
@@ -87,7 +87,7 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 ### 1.4 Potential Bugs and Edge Cases
 
-1. ✓ **`safe_g2_cell` undefined** (critical): see Section 1.1 above. Called at `app.r:2299`, never defined anywhere in the file.
+1. ~~✓ **`safe_g2_cell` undefined** (critical): called but never defined, causing a fatal error on any `fit0` failure in `compute_unconditional()`.~~ *(Done: function defined — see priority item 1.)*
 
 2. ✓ **Single-level factor controls**: if a control variable is a factor with only one level present after filtering complete cases, `model.matrix()` will drop it silently. Downstream, `ncol(Zmm)` will differ from `length(input$control_vars)`, and the `df` in the p-value calculation will be wrong. The variation check (`has_variation`) in `calculate_partial_eta_squared_with_F()` handles this for that function, but not consistently across all functions that build control matrices.
 
@@ -225,7 +225,7 @@ The following items are ordered by urgency for the meeting.
 
 ### Critical (must fix before any public release or submission)
 
-1. **Define `safe_g2_cell()`** or remove the fallback branch that calls it (`app.r:2299`). Currently causes a fatal error whenever `fit0` fails in `compute_unconditional()`. *(Confirmed: function is called but never defined.)*
+1. ~~**Define `safe_g2_cell()`** or remove the fallback branch that calls it. Currently causes a fatal error whenever `fit0` fails in `compute_unconditional()`.~~ *(Done: `safe_g2_cell(O, E)` defined alongside `safe_pearson_cell` — returns `2 * O * log(O / E)` when both O > 0 and E > 0, and `0` otherwise, matching the standard G² cell contribution.)*
 
 2. ~~**Add an open-source license** to the repository (`LICENSE` file).~~ *(Done: MIT License added to the repository root.)* **Remaining action**: declare the license (MIT, SPDX: `MIT`) in the SoftwareX metadata table and in the paper.
 

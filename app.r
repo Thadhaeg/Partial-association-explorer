@@ -952,6 +952,13 @@ safe_pearson_cell <- function(O, E) {
   (O - E) / sqrt(E)
 }
 
+safe_g2_cell <- function(O, E) {
+  if (is.na(O) || is.na(E) || E <= 0 || O <= 0) {
+    return(0)
+  }
+  2 * O * log(O / E)
+}
+
 # ----------------------------
 # Helpers for cat-cat outputs
 # ----------------------------
