@@ -1178,7 +1178,9 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
   y_fac <- droplevels(factor(y_vec))
 
   if (is.null(Zdf) || ncol(Zdf) == 0) {
-    return(compute_unconditional(x_fac, y_fac))
+    res <- compute_unconditional(x_fac, y_fac)
+    names(res)[names(res) == "VL"] <- "VL/Z"
+    return(res)
   }
 
   Z <- as.data.frame(Zdf)
@@ -1225,6 +1227,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
   # Conditional fallback -> revert to unconditional measure
   if (inherits(fit0, "try-error")) {
     base_res <- compute_unconditional(x_fac, y_fac)
+    names(base_res)[names(base_res) == "VL"] <- "VL/Z"
     return(base_res)
   }
 
@@ -1271,6 +1274,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
       lambda = NULL,
       kappa = NULL
     )
+    names(out)[names(out) == "VL"] <- "VL/Z"
     return(out)
   }
 

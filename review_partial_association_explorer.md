@@ -99,9 +99,7 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 > NUANCE: The guard at line 719 *does* prevent duplicate observer creation for the same index. However, because button IDs are purely index-based (`paste0("reverse_", idx)`), when the user selects a different set of variables the existing observers (tied to old variable pairs) will still fire when buttons with the same numeric index are clicked. The axis-reversal state for old pairs (`reversed_axes$plot_1`, etc.) also persists and bleeds into new pairs at the same index. The real issue is therefore **stale state and stale observer bindings**, not purely accumulation.
 
-6. ✓ **`compute_conditional` fallback**: when `fit0` fails (`app.r:2448-2451`), the code falls back to `compute_unconditional()` silently. The returned list will have `VL` named `VL` (not `VL/Z`), but the downstream renaming (`names(out)[names(out) == "VL"] <- "VL/Z"`) only applies to the conditional success path (`app.r:2522`). So on fallback, the association matrix code will call `cor_result[["VL/Z"]]` (`app.r:2632`) and get `NULL`, storing `0`. This will make the pair silently disappear from the network rather than falling back to the unconditional value. Fix: ensure the fallback also renames `VL` to `VL/Z` in the conditional function.
-
-> NUANCE: There are **three** un-renamed fallback paths in `compute_conditional()`, not just one: (a) empty `Zdf` (`app.r:2402-2403`), (b) `fit0` failure (`app.r:2448-2451`), and (c) `fit1` failure (`app.r:2480-2497`, returns `make_catcat_result(VL = NA_real_, ...)` also not renamed). All three silently return `NULL` for `cor_result[["VL/Z"]]`.
+6. ~~✓ **`compute_conditional` fallback**: when `fit0` fails, the code fell back to `compute_unconditional()` silently, returning `VL` instead of `VL/Z`, causing the pair to silently disappear from the network.~~ *(Done: see priority item 3. All three fallback paths now rename `VL` to `VL/Z` before returning.)*
 
 ### 1.5 Suggestions for Improvement
 
@@ -119,7 +117,7 @@ The following issues were not mentioned in the original review but were found du
 
 - ~~**`threshold_cat` slider mislabeled as "Cramer's V"**: The second threshold slider (`app.r:115-121`) is labeled `"Threshold for Categorical-Categorical Associations (Cramer's V)"`. However, the code computes `VL` (the likelihood-ratio-based statistic defined in the paper), not Cramer's V. The `README.md` also calls it "Partial Cramer's V" (`README.md:6`), while the paper exclusively uses the notation `V_L`. This inconsistency between the UI label, the README, and the paper should be resolved: decide on one name (`V_L` or Cramér's V) and use it consistently.~~ *(Done: slider label changed to `V_L` in `app.r`. Remaining: align `README.md` which still says "Partial Cramer's V".)*
 
-- **`compute_conditional()` empty-Zdf fallback also returns without renaming**: When called with `Zdf = NULL` or `ncol(Zdf) == 0`, `compute_conditional()` immediately returns `compute_unconditional()` at `app.r:2402-2403`, before the renaming at line 2522. In practice this path is guarded by the caller (`has_controls && !is.null(control_data)`), so it should not be reached, but the function's internal contract is still inconsistent.
+- ~~**`compute_conditional()` empty-Zdf fallback also returns without renaming**: When called with `Zdf = NULL` or `ncol(Zdf) == 0`, `compute_conditional()` immediately returned `compute_unconditional()` before renaming `VL` to `VL/Z`.~~ *(Done: fixed as part of priority item 3.)*
 
 - ~~**Version mismatch between filename and footer**: The file is named `partial_association_explorer_7.r` (suggesting version 7), but the app footer displays `"v3.5.5."`.~~ *(Done: file renamed to `app.r` and version string removed from footer.)*
 
@@ -231,7 +229,7 @@ The following items are ordered by urgency for the meeting.
 
 2. ~~**Add an open-source license** to the repository (`LICENSE` file).~~ *(Done: MIT License added to the repository root.)* **Remaining action**: declare the license (MIT, SPDX: `MIT`) in the SoftwareX metadata table and in the paper.
 
-3. **Fix `compute_conditional()` fallback**: ensure the returned list uses `VL/Z` (or better, `VL_Z`) consistently, including in **all three** fallback paths (`app.r:2402-2403`, `2448-2451`, `2480-2497`), so the association matrix never receives a silent `NULL`. *(Confirmed: three un-renamed paths found, not just one.)*
+3. ~~**Fix `compute_conditional()` fallback**: ensure the returned list uses `VL/Z` (or better, `VL_Z`) consistently, including in **all three** fallback paths, so the association matrix never receives a silent `NULL`.~~ *(Done: `names(res)[names(res) == "VL"] <- "VL/Z"` added before the `return()` in all three paths: empty-Zdf, `fit0` failure, and `fit1` failure.)*
 
 4. ~~**Check `optim()` convergence**: inspect `fit$convergence` after each call to `fit_structured_mnl()` and surface a warning when it is non-zero.~~ *(Done: `warning()` added in `fit_structured_mnl()` when `fit$convergence != 0`, reporting the convergence code and table dimensions.)*
 
