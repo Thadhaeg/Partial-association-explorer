@@ -117,7 +117,7 @@ In `calculate_correlations()`, the threshold is applied at computation time: val
 
 The following issues were not mentioned in the original review but were found during verification.
 
-- **`threshold_cat` slider mislabeled as "Cramer's V"**: The second threshold slider (`app.r:115-121`) is labeled `"Threshold for Categorical-Categorical Associations (Cramer's V)"`. However, the code computes `VL` (the likelihood-ratio-based statistic defined in the paper), not Cramer's V. The `README.md` also calls it "Partial Cramer's V" (`README.md:6`), while the paper exclusively uses the notation `V_L`. This inconsistency between the UI label, the README, and the paper should be resolved: decide on one name (`V_L` or Cramér's V) and use it consistently.
+- ~~**`threshold_cat` slider mislabeled as "Cramer's V"**: The second threshold slider (`app.r:115-121`) is labeled `"Threshold for Categorical-Categorical Associations (Cramer's V)"`. However, the code computes `VL` (the likelihood-ratio-based statistic defined in the paper), not Cramer's V. The `README.md` also calls it "Partial Cramer's V" (`README.md:6`), while the paper exclusively uses the notation `V_L`. This inconsistency between the UI label, the README, and the paper should be resolved: decide on one name (`V_L` or Cramér's V) and use it consistently.~~ *(Done: slider label changed to `V_L` in `app.r`. Remaining: align `README.md` which still says "Partial Cramer's V".)*
 
 - **`compute_conditional()` empty-Zdf fallback also returns without renaming**: When called with `Zdf = NULL` or `ncol(Zdf) == 0`, `compute_conditional()` immediately returns `compute_unconditional()` at `app.r:2402-2403`, before the renaming at line 2522. In practice this path is guarded by the caller (`has_controls && !is.null(control_data)`), so it should not be reached, but the function's internal contract is still inconsistent.
 
@@ -245,7 +245,7 @@ The following items are ordered by urgency for the meeting.
 
 8. ~~**Remove dead code**: `build_contingency_table()`, `find_optimal_submatrix()`, `find_optimal_submatrix_heuristic()`, `library(VGAM)`, `library(grid)`, `library(gridExtra)`.~~ *(Done: three functions moved to `archive.r`; three unused `library()` calls removed from `app.r`.)*
 
-9. **Fix the `threshold_cat` slider label**: change `"Cramer's V"` (`app.r:116`) to `V_L` to match the actual statistic computed, and align with README and paper. *(New finding from Section 1.6.)*
+9. ~~**Fix the `threshold_cat` slider label**: change `"Cramer's V"` (`app.r:116`) to `V_L` to match the actual statistic computed, and align with README and paper.~~ *(Done: label updated to `"Threshold for Categorical-Categorical Associations (V_L)"`; stale "Cramer's V" comment in network edge builder also fixed.)*
 
 ### Medium priority (code quality and robustness)
 
@@ -265,4 +265,4 @@ The following items are ordered by urgency for the meeting.
 16. Add a worked example to the paper/vignette.
 17. Add in-text citation to Cox and Snell (1989) at the definition of VL (`Association_explorer_methods.tex:434`).
 18. Trim reference rows/columns from the displayed gamma table in the cat-cat pair plots (`app.r:1155`).
-19. Clarify the slider label "R²" to read "R² / η² threshold" for mixed pairs (`app.r:108`).
+19. ~~Clarify the slider label "R²" to read "R² / η² threshold" for mixed pairs (`app.r:108`).~~ *(Done: label updated to `"Threshold for Quantitative-Quantitative and Quantitative-Categorical Associations (R² / η²)"`.)*

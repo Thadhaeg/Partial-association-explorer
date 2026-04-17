@@ -103,7 +103,7 @@ ui <- tagList(
           sidebarPanel(
             sliderInput(
               "threshold_num",
-              "Threshold for Quantitative-Quantitative and Quantitative-Categorical Associations (R²)",
+              "Threshold for Quantitative-Quantitative and Quantitative-Categorical Associations (R² / η²)",
               min = 0,
               max = 1,
               value = 0.5,
@@ -111,7 +111,7 @@ ui <- tagList(
             ),
             sliderInput(
               "threshold_cat",
-              "Threshold for Categorical-Categorical Associations (Cramer's V)",
+              "Threshold for Categorical-Categorical Associations (V_L)",
               min = 0,
               max = 1,
               value = 0.5,
@@ -1897,7 +1897,7 @@ server <- function(input, output, session) {
         4 * (strengths - min(strengths)) / (max(strengths) - min(strengths))
     }
 
-    # Colors: metrics are non-signed in your matrix (Cramer's V, |r|, sqrt(η²)), so avoid fake sign coding
+    # Colors: metrics are non-signed in your matrix (V_L, |r|, sqrt(η²)), so avoid fake sign coding
     edges$color <- "steelblue"
 
     # Tooltip
