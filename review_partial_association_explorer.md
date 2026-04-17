@@ -37,9 +37,7 @@ The approach uses a custom structured multinomial logit fitted via `optim()` (BF
 
 - ~~✓ `safe_g2_cell()` is referenced inside the fallback path in `compute_unconditional()` but is **never defined** anywhere in the file. If `fit0` fails for any contingency table, the fallback will throw a `could not find function "safe_g2_cell"` error. This is a definite bug.~~ *(Done: function defined — see priority item 1.)*
 
-- ✓ In `compute_conditional()`, the result list renames `VL` to `VL/Z` at the very end (`app.r:2522`). Downstream code accesses `cor_result[["VL/Z"]]` (`app.r:2632`) in the pairs plot and `vl_value <- assoc_res[["VL/Z"]]` (`app.r:1078`) in the correlation matrix. This is consistent but brittle; a slash in a list name is legal in R but unusual and easy to break. Rename it to something like `VL_Z` throughout.
-
-> NUANCE: The slash in a list name is not a functional R error — `[["VL/Z"]]` syntax works correctly. The concern is purely one of style robustness (e.g., `$` accessor does not work with names containing `/` or `|`).
+- ~~✓ In `compute_conditional()`, the result list renamed `VL` to `VL/Z`. The slash was legal but prevented use of the `$` accessor.~~ *(Done: renamed to `VL_Z` throughout — see priority item 7.)*
 
 **Network threshold application**
 
@@ -208,7 +206,7 @@ For a SoftwareX article, the software description section must cover the app's m
 | `r_{XY.Z}` | `partial_cor` (variable name) | Consistent, no issue |
 | `eta^2_{X|Z}` | `partial_eta_sq` | Consistent |
 | `V_L` (unconditional) | `VL` (list element) | ✓ Consistent |
-| `V_{L\|Z}` (conditional) | `VL/Z` (list name, line 2522) | ✓ The slash in a list name is non-standard; use `VL_Z` |
+| `V_{L\|Z}` (conditional) | `VL_Z` (list name) | ✓ Renamed from `VL/Z` to `VL_Z` — see priority item 7 |
 | `G^2` | never stored as a named quantity | ✓ G2 is computed but not returned from `compute_lr_stats` separately; only VL and p_value are returned. If future features need G2 directly (e.g., for display), it will need to be re-derived. |
 
 ### 3.4 Methods Described in the Paper but Not Implemented
@@ -239,7 +237,7 @@ The following items are ordered by urgency for the meeting.
 
 6. **Clarify `|r|` vs `R^2` display inconsistency** throughout the paper, the UI labels, and the code. *(Confirmed: `abs(r)` stored at line 2590, paper defines `R²` as the measure.)*
 
-7. **Rename `VL/Z`** to `VL_Z` everywhere for robustness. *(Confirmed: slash in list name works but prevents use of `$` accessor.)*
+7. ~~**Rename `VL/Z`** to `VL_Z` everywhere for robustness.~~ *(Done: all six occurrences renamed — four `names(...) <- "VL_Z"` assignments and two `[["VL_Z"]]` accessors.)*
 
 8. ~~**Remove dead code**: `build_contingency_table()`, `find_optimal_submatrix()`, `find_optimal_submatrix_heuristic()`, `library(VGAM)`, `library(grid)`, `library(gridExtra)`.~~ *(Done: three functions moved to `archive.r`; three unused `library()` calls removed from `app.r`.)*
 

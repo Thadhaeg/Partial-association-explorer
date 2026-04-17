@@ -1186,7 +1186,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
 
   if (is.null(Zdf) || ncol(Zdf) == 0) {
     res <- compute_unconditional(x_fac, y_fac)
-    names(res)[names(res) == "VL"] <- "VL/Z"
+    names(res)[names(res) == "VL"] <- "VL_Z"
     return(res)
   }
 
@@ -1234,7 +1234,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
   # Conditional fallback -> revert to unconditional measure
   if (inherits(fit0, "try-error")) {
     base_res <- compute_unconditional(x_fac, y_fac)
-    names(base_res)[names(base_res) == "VL"] <- "VL/Z"
+    names(base_res)[names(base_res) == "VL"] <- "VL_Z"
     return(base_res)
   }
 
@@ -1281,7 +1281,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
       lambda = NULL,
       kappa = NULL
     )
-    names(out)[names(out) == "VL"] <- "VL/Z"
+    names(out)[names(out) == "VL"] <- "VL_Z"
     return(out)
   }
 
@@ -1308,7 +1308,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
     kappa = params$kappa
   )
 
-  names(out)[names(out) == "VL"] <- "VL/Z"
+  names(out)[names(out) == "VL"] <- "VL_Z"
   out
 }
 
@@ -1415,7 +1415,7 @@ calculate_correlations <- function(
             y_vec = y,
             Zdf = control_data
           )
-          vl_value <- cor_result[["VL/Z"]]
+          vl_value <- cor_result[["VL_Z"]]
           cor_type <- "VL|Z"
         } else {
           cor_result <- compute_unconditional(
@@ -2325,7 +2325,7 @@ server <- function(input, output, session) {
               y_vec = df_full[[v2]],
               Zdf = df_full[, input$control_vars, drop = FALSE]
             )
-            vl_value <- assoc_res[["VL/Z"]]
+            vl_value <- assoc_res[["VL_Z"]]
             assoc_title <- "Conditional categorical association"
           } else {
             assoc_res <- compute_unconditional(
