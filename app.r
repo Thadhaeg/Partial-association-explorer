@@ -900,6 +900,13 @@ fit_structured_mnl <- function(
     control = list(maxit = 1000, reltol = 1e-8)
   )
 
+  if (fit$convergence != 0) {
+    warning(
+      "optim() did not converge (code ", fit$convergence, ") for a ",
+      I, "x", J, " table. VL result may be unreliable."
+    )
+  }
+
   pars_hat <- unpack_theta(fit$par, I, J, q, include_gamma)
   eta_hat <- compute_eta(pars_hat, mapW, Zmm, n_obs = length(y_idx_local))
   pi_hat <- softmax_rows(eta_hat)

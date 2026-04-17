@@ -33,7 +33,7 @@
 
 The approach uses a custom structured multinomial logit fitted via `optim()` (BFGS). This is mathematically sound and matches the paper. However:
 
-- ✓ `optim()` with `method = "BFGS"` has no guarantee of finding the global optimum, especially for larger contingency tables. There is no convergence check: `fit$convergence` is never inspected anywhere in the file. A failed or non-converged fit silently propagates to `ll1`, potentially producing a negative `G2` (which would yield `VL = NA` and `p_value = NA` after `compute_lr_stats()` guards against negative `G2`, that guard is good). Add an explicit check on `fit$convergence != 0` and surface a warning.
+- ✓ `optim()` with `method = "BFGS"` has no guarantee of finding the global optimum, especially for larger contingency tables. ~~There is no convergence check: `fit$convergence` is never inspected anywhere in the file.~~ *(Done: convergence check added — see priority item 4.)* A non-converged fit still propagates to `ll1`; the `compute_lr_stats()` guard against negative `G2` remains the safety net for downstream computation.
 
 - ✓ `safe_g2_cell()` is referenced inside the fallback path in `compute_unconditional()` (`app.r:2299`) but is **never defined** anywhere in the file. If `fit0` fails for any contingency table, the fallback will throw a `could not find function "safe_g2_cell"` error. This is a definite bug.
 
@@ -233,7 +233,7 @@ The following items are ordered by urgency for the meeting.
 
 3. **Fix `compute_conditional()` fallback**: ensure the returned list uses `VL/Z` (or better, `VL_Z`) consistently, including in **all three** fallback paths (`app.r:2402-2403`, `2448-2451`, `2480-2497`), so the association matrix never receives a silent `NULL`. *(Confirmed: three un-renamed paths found, not just one.)*
 
-4. **Check `optim()` convergence**: inspect `fit$convergence` after each call to `fit_structured_mnl()` and surface a warning when it is non-zero. *(Confirmed: no convergence check anywhere in the file.)*
+4. ~~**Check `optim()` convergence**: inspect `fit$convergence` after each call to `fit_structured_mnl()` and surface a warning when it is non-zero.~~ *(Done: `warning()` added in `fit_structured_mnl()` when `fit$convergence != 0`, reporting the convergence code and table dimensions.)*
 
 ### High priority (needed for a clean submission)
 
