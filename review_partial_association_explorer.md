@@ -211,7 +211,7 @@ For a SoftwareX article, the software description section must cover the app's m
 
 ### 3.4 Methods Described in the Paper but Not Implemented
 
-- ✓ The paper describes interaction parameters `gamma_ij` as being displayed in the pair plots alongside D and R. The code does include a gamma table in the UI (`app.r:1154-1191`). **However**, the gamma matrix returned by `fit1$params$gamma` is a full I×J matrix including the reference row/column (which are always 0 by constraint, `app.r:1997-2003`). The paper's notation indexes gamma only for non-reference cells. The displayed table converts the full matrix directly (`app.r:1155`) and therefore shows a row and column of zeros corresponding to the reference category, which could confuse users. Add a note in the UI or trim the reference row/column from the displayed gamma table.
+- ~~✓ The paper describes interaction parameters `gamma_ij` as being displayed in the pair plots alongside D and R. The gamma matrix was a full I×J matrix including reference row/column (always 0 by constraint), which could confuse users.~~ *(Done: reference row and column trimmed before display — see priority item 18.)*
 
 - ✓ Section 2.3 of the paper describes the added-variable plot as "also displaying the corresponding slope and partial correlation." The code does include both in the subtitle (`partial correlation = ... | Slope = ...`), which is consistent. Good.
 
@@ -260,5 +260,5 @@ The following items are ordered by urgency for the meeting.
 15. ~~Remove debug `cat()` calls from production code (lines 729-735, 892).~~ *(Done.)*
 16. Add a worked example to the paper/vignette.
 17. ~~Add in-text citation to Cox and Snell (1989) at the definition of VL (`Association_explorer_methods.tex:434`).~~ *(Done: `(Cox \& Snell, 1989)` added inline after the formula, consistent with the paper's author-year reference style.)*
-18. Trim reference rows/columns from the displayed gamma table in the cat-cat pair plots (`app.r:1155`).
+18. ~~Trim reference rows/columns from the displayed gamma table in the cat-cat pair plots.~~ *(Done: row 1 and column 1 (always zero by corner constraint) are now dropped before rendering the γ table.)*
 19. ~~Clarify the slider label "R²" to read "R² / η² threshold" for mixed pairs (`app.r:108`).~~ *(Done: label updated to `"Threshold for Quantitative-Quantitative and Quantitative-Categorical Associations (R² / η²)"`.)*

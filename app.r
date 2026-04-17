@@ -2409,7 +2409,12 @@ server <- function(input, output, session) {
 
           gamma_table_ui <- NULL
           if (!is.null(assoc_res$gamma)) {
-            gamma_df <- as.data.frame.matrix(round(assoc_res$gamma, 3))
+            # Drop reference row and column (always zero by corner constraint)
+            gmat <- assoc_res$gamma
+            if (nrow(gmat) > 1 && ncol(gmat) > 1) {
+              gmat <- gmat[-1, -1, drop = FALSE]
+            }
+            gamma_df <- as.data.frame.matrix(round(gmat, 3))
             gamma_df <- tibble::rownames_to_column(gamma_df, var = v1)
             gamma_table_ui <- tagList(
               br(),
