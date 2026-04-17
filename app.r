@@ -252,6 +252,13 @@ partial_residuals <- function(y, controls_df) {
   residuals(lm(y ~ ., data = dfm))
 }
 
+# Returns the number of controls that actually have variation (same filter as
+# partial_residuals uses internally), so p_value_partial_cor() gets the correct df.
+count_active_controls <- function(controls_df) {
+  if (is.null(controls_df) || ncol(controls_df) == 0) return(0L)
+  sum(sapply(controls_df, function(z) length(unique(z[!is.na(z)])) > 1))
+}
+
 # NEW: Residualize a numeric outcome on controls (Y ~ Z) and return residuals
 residualize_on_controls <- function(y, controls_df) {
   if (is.null(controls_df) || ncol(controls_df) == 0) {
@@ -1377,7 +1384,7 @@ calculate_correlations <- function(
                 cor_type <- "Partial r"
 
                 n_eff <- length(resid_x)
-                k_controls <- ncol(control_data)
+                k_controls <- count_active_controls(control_data)
                 p_val <- p_value_partial_cor(r, n_eff, k_controls)
               }
             },

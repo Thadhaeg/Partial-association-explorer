@@ -21,7 +21,7 @@
 
 **Partial correlation (numeric-numeric, conditional)**
 
-✓ The implementation in `partial_residuals()` regresses each variable on the controls independently and then correlates the two residual series (`app.r:1467-1482`, `2585-2587`). This is the correct added-variable / Frisch-Waugh approach as described in Section 2 of the paper. The t-statistic in `p_value_partial_cor()` uses `df = n_eff - k_controls - 2`, matching the paper's formula (`app.r:1703`). No error here, but there is a subtle counting issue: `k_controls` is set to `ncol(control_data)` before any variation-filtering (`app.r:2594`), so if some controls are constant and get dropped inside `partial_residuals()` (`app.r:1473-1474`), the degrees of freedom used for the p-value will be overestimated (too many df removed), making the test conservative. Fix: pass the number of controls *actually used* (post-filtering) back alongside the residuals.
+✓ The implementation in `partial_residuals()` regresses each variable on the controls independently and then correlates the two residual series. This is the correct added-variable / Frisch-Waugh approach as described in Section 2 of the paper. The t-statistic in `p_value_partial_cor()` uses `df = n_eff - k_controls - 2`, matching the paper's formula. ~~A subtle counting issue existed: `k_controls` was set to `ncol(control_data)` before variation-filtering, so constant controls dropped inside `partial_residuals()` overcounted df, making the test conservative.~~ *(Fixed: `k_controls` now uses `count_active_controls()` — see priority item 12.)*
 
 **Partial eta-squared (numeric-categorical, conditional)**
 
@@ -249,7 +249,7 @@ The following items are ordered by urgency for the meeting.
 
 11. ~~**Fix the `data_env$full_data` reactivity pattern**: replace with a standard `reactiveVal()` at server scope.~~ *(Removed: this pattern is functional — see Section 1.3 correction. Refactoring is still a style improvement but not a bug fix.)*
 
-12. **Fix the df overcounting** in `p_value_partial_cor()` when some controls have been dropped during variation filtering (`app.r:2594` vs `partial_residuals()` line 1473).
+12. ~~**Fix the df overcounting** in `p_value_partial_cor()` when some controls have been dropped during variation filtering.~~ *(Done: added `count_active_controls()` helper that applies the same variation filter as `partial_residuals()` internally; `k_controls` in `calculate_correlations()` now uses this count instead of `ncol(control_data)`.)*
 
 13. **Add convergence/progress feedback** for large cat-cat computations (spinner or warning about computation time for large tables).
 
