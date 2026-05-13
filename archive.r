@@ -19,6 +19,8 @@
 find_optimal_submatrix <- function(contribution_matrix, n = 5) {
   N <- nrow(contribution_matrix)
   M <- ncol(contribution_matrix)
+  target_rows <- min(N, n)
+  target_cols <- min(M, n)
 
   # If matrix is already small enough, return all rows/columns
   if (N <= n && M <= n) {
@@ -50,16 +52,16 @@ find_optimal_submatrix <- function(contribution_matrix, n = 5) {
 
   constraint_index <- 1
 
-  # Constraint 1: Sum of u_i = n
+  # Constraint 1: Sum of u_i = target_rows
   constraint_matrix[constraint_index, 1:N] <- 1
   constraint_dir[constraint_index] <- "=="
-  constraint_rhs[constraint_index] <- n
+  constraint_rhs[constraint_index] <- target_rows
   constraint_index <- constraint_index + 1
 
-  # Constraint 2: Sum of v_j = n
+  # Constraint 2: Sum of v_j = target_cols
   constraint_matrix[constraint_index, (N + 1):(N + M)] <- 1
   constraint_dir[constraint_index] <- "=="
-  constraint_rhs[constraint_index] <- n
+  constraint_rhs[constraint_index] <- target_cols
   constraint_index <- constraint_index + 1
 
   # Constraints for z_ij = u_i * v_j
@@ -142,6 +144,8 @@ find_optimal_submatrix <- function(contribution_matrix, n = 5) {
 find_optimal_submatrix_heuristic <- function(contribution_matrix, n = 5) {
   N <- nrow(contribution_matrix)
   M <- ncol(contribution_matrix)
+  target_rows <- min(N, n)
+  target_cols <- min(M, n)
 
   # Flatten and get top individual cells
   contribution_df <- data.frame(
@@ -156,15 +160,15 @@ find_optimal_submatrix_heuristic <- function(contribution_matrix, n = 5) {
   contribution_df <- contribution_df[order(-contribution_df$value), ]
 
   # Get top categories from each variable
-  top_rows <- unique(contribution_df$row[1:min(n * n, nrow(contribution_df))])
-  top_cols <- unique(contribution_df$col[1:min(n * n, nrow(contribution_df))])
+  top_rows <- unique(contribution_df$row[1:min(target_rows * target_cols, nrow(contribution_df))])
+  top_cols <- unique(contribution_df$col[1:min(target_rows * target_cols, nrow(contribution_df))])
 
-  # Take top n from each
-  if (length(top_rows) > n) {
-    top_rows <- top_rows[1:n]
+  # Take top target_rows/target_cols from each
+  if (length(top_rows) > target_rows) {
+    top_rows <- top_rows[1:target_rows]
   }
-  if (length(top_cols) > n) {
-    top_cols <- top_cols[1:n]
+  if (length(top_cols) > target_cols) {
+    top_cols <- top_cols[1:target_cols]
   }
 
   objective_value <- sum(contribution_matrix[

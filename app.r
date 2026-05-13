@@ -13,6 +13,10 @@ library(tibble)
 library(shinycssloaders)
 library(nnet)
 
+if (file.exists("archive.r")) {
+  sys.source("archive.r", envir = environment())
+}
+
 
 ui <- tagList(
   tags$head(
@@ -103,34 +107,33 @@ ui <- tagList(
           sidebarPanel(
             sliderInput(
               "threshold_num",
-              "Threshold for Quantitative-Quantitative and Quantitative-Categorical Associations (R² / η²)",
+              "Range for Quantitative-Quantitative and Quantitative-Categorical Associations (R² / η²)",
               min = 0,
               max = 1,
-              value = 0.5,
+              value = c(0.5, 1),
               step = 0.05
             ),
             sliderInput(
               "threshold_cat",
-              "Threshold for Categorical-Categorical Associations (V_L)",
+              "Range for Categorical-Categorical Associations (V_L)",
               min = 0,
               max = 1,
-              value = 0.5,
+              value = c(0.5, 1),
               step = 0.05
             ),
 
-            # p-value threshold (max acceptable p)
             sliderInput(
               "threshold_p",
-              "Significance threshold (maximum p-value)",
+              "Range for p-values",
               min = 0,
               max = 0.2,
-              value = 0.05,
+              value = c(0, 0.05),
               step = 0.005
             ),
 
             tags$i(tags$span(
               style = "color: #666666",
-              "Only associations stronger than the thresholds will be displayed in the plot."
+              "Only associations within the selected ranges will be displayed in the plot."
             )),
             br(),
             br(),
@@ -729,6 +732,272 @@ parse_W_levels <- function(W_levels, sep, x_levels, y_levels) {
   list(wx = wx, wy = wy, i = i_idx, j = j_idx)
 }
 
+if (!exists("find_optimal_submatrix_heuristic", mode = "function")) {
+  find_optimal_submatrix_heuristic <- function(contribution_matrix, n = 5) {
+    N <- nrow(contribution_matrix)
+    M <- ncol(contribution_matrix)
+    target_rows <- min(N, n)
+    target_cols <- min(M, n)
+
+    contribution_df <- data.frame(
+      row = rep(seq_len(N), each = M),
+      col = rep(seq_len(M), times = N),
+      value = as.vector(contribution_matrix),
+      stringsAsFactors = FALSE
+    )
+
+    contribution_df <- contribution_df[contribution_df$value > 0, , drop = FALSE]
+    contribution_df <- contribution_df[order(-contribution_df$value), , drop = FALSE]
+
+    if (nrow(contribution_df) == 0) {
+      return(list(
+        rows = seq_len(target_rows),
+        cols = seq_len(target_cols),
+        objective = 0
+      ))
+    }
+
+    top_n <- min(target_rows * target_cols, nrow(contribution_df))
+    top_rows <- unique(contribution_df$row[seq_len(top_n)])
+    top_cols <- unique(contribution_df$col[seq_len(top_n)])
+
+    if (length(top_rows) > target_rows) {
+      top_rows <- top_rows[seq_len(target_rows)]
+    }
+    if (length(top_cols) > target_cols) {
+      top_cols <- top_cols[seq_len(target_cols)]
+    }
+
+    list(
+      rows = top_rows,
+      cols = top_cols,
+      objective = sum(contribution_matrix[top_rows, top_cols, drop = FALSE])
+    )
+  }
+}
+
+if (!exists("find_optimal_submatrix", mode = "function")) {
+  find_optimal_submatrix <- function(contribution_matrix, n = 5) {
+    N <- nrow(contribution_matrix)
+    M <- ncol(contribution_matrix)
+    target_rows <- min(N, n)
+    target_cols <- min(M, n)
+
+    if (N <= n && M <= n) {
+      return(list(
+        rows = seq_len(N),
+        cols = seq_len(M),
+        objective = sum(contribution_matrix)
+      ))
+    }
+
+    if (!require(lpSolve, quietly = TRUE)) {
+      return(find_optimal_submatrix_heuristic(contribution_matrix, n))
+    }
+
+    total_vars <- N + M + N * M
+    objective <- c(
+      rep(0, N + M),
+      as.vector(t(contribution_matrix))
+    )
+
+    n_constraints <- 2 + 3 * N * M
+    constraint_matrix <- matrix(0, nrow = n_constraints, ncol = total_vars)
+    constraint_dir <- character(n_constraints)
+    constraint_rhs <- numeric(n_constraints)
+
+    constraint_index <- 1L
+    constraint_matrix[constraint_index, seq_len(N)] <- 1
+    constraint_dir[constraint_index] <- "=="
+    constraint_rhs[constraint_index] <- target_rows
+    constraint_index <- constraint_index + 1L
+
+    constraint_matrix[constraint_index, N + seq_len(M)] <- 1
+    constraint_dir[constraint_index] <- "=="
+    constraint_rhs[constraint_index] <- target_cols
+    constraint_index <- constraint_index + 1L
+
+    for (i in seq_len(N)) {
+      for (j in seq_len(M)) {
+        z_index <- N + M + (i - 1L) * M + j
+
+        constraint_matrix[constraint_index, i] <- -1
+        constraint_matrix[constraint_index, z_index] <- 1
+        constraint_dir[constraint_index] <- "<="
+        constraint_rhs[constraint_index] <- 0
+        constraint_index <- constraint_index + 1L
+
+        constraint_matrix[constraint_index, N + j] <- -1
+        constraint_matrix[constraint_index, z_index] <- 1
+        constraint_dir[constraint_index] <- "<="
+        constraint_rhs[constraint_index] <- 0
+        constraint_index <- constraint_index + 1L
+
+        constraint_matrix[constraint_index, i] <- -1
+        constraint_matrix[constraint_index, N + j] <- -1
+        constraint_matrix[constraint_index, z_index] <- 1
+        constraint_dir[constraint_index] <- ">="
+        constraint_rhs[constraint_index] <- -1
+        constraint_index <- constraint_index + 1L
+      }
+    }
+
+    solution <- lpSolve::lp(
+      direction = "max",
+      objective.in = objective,
+      const.mat = constraint_matrix,
+      const.dir = constraint_dir,
+      const.rhs = constraint_rhs,
+      all.bin = TRUE,
+      compute.sens = FALSE
+    )
+
+    if (solution$status != 0) {
+      return(find_optimal_submatrix_heuristic(contribution_matrix, n))
+    }
+
+    u_values <- solution$solution[seq_len(N)]
+    v_values <- solution$solution[N + seq_len(M)]
+
+    list(
+      rows = which(round(u_values) == 1),
+      cols = which(round(v_values) == 1),
+      objective = solution$objval
+    )
+  }
+}
+
+group_catcat_observations <- function(Zmm, y_idx_local, K) {
+  n_obs <- length(y_idx_local)
+
+  if (is.null(Zmm) || ncol(Zmm) == 0) {
+    counts <- matrix(
+      as.numeric(tabulate(y_idx_local, nbins = K)),
+      nrow = 1,
+      ncol = K
+    )
+
+    return(list(
+      counts = counts,
+      weights = rowSums(counts),
+      Z_group = NULL,
+      group_id = rep.int(1L, n_obs)
+    ))
+  }
+
+  Zdf <- as.data.frame(Zmm, check.names = FALSE)
+  group_fac <- interaction(Zdf, drop = TRUE, lex.order = TRUE, sep = "\r")
+  y_fac <- factor(y_idx_local, levels = seq_len(K))
+
+  counts <- as.matrix(xtabs(~ group_fac + y_fac))
+  first_idx <- match(levels(group_fac), group_fac)
+  Z_group <- Zmm[first_idx, , drop = FALSE]
+
+  list(
+    counts = counts,
+    weights = rowSums(counts),
+    Z_group = Z_group,
+    group_id = as.integer(group_fac)
+  )
+}
+
+prepare_catcat_problem <- function(
+  x_vec,
+  y_vec,
+  Zdf = NULL,
+  sep = "___AE___"
+) {
+  x_fac <- droplevels(factor(x_vec))
+  y_fac <- droplevels(factor(y_vec))
+
+  ok <- if (is.null(Zdf) || ncol(Zdf) == 0) {
+    stats::complete.cases(x_fac, y_fac)
+  } else {
+    stats::complete.cases(x_fac, y_fac, Zdf)
+  }
+
+  x_fac <- droplevels(x_fac[ok])
+  y_fac <- droplevels(y_fac[ok])
+  if (!is.null(Zdf) && ncol(Zdf) > 0) {
+    Zdf <- Zdf[ok, , drop = FALSE]
+  }
+
+  if (length(x_fac) == 0) {
+    return(list(
+      empty = TRUE,
+      x_fac = x_fac,
+      y_fac = y_fac,
+      Zdf = Zdf
+    ))
+  }
+
+  x_levels <- levels(x_fac)
+  y_levels <- levels(y_fac)
+  I <- length(x_levels)
+  J <- length(y_levels)
+
+  grid <- expand.grid(
+    x = as.character(x_levels),
+    y = as.character(y_levels),
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  W_levels <- paste(grid$x, grid$y, sep = sep)
+  K <- length(W_levels)
+
+  W_obs_labels <- paste(as.character(x_fac), as.character(y_fac), sep = sep)
+  y_idx_local <- match(W_obs_labels, W_levels)
+  if (anyNA(y_idx_local)) {
+    stop("Some observed (X,Y) pairs could not be matched to full W_levels.")
+  }
+
+  Zmm <- NULL
+  if (!is.null(Zdf) && ncol(Zdf) > 0) {
+    Zmm <- as.matrix(make_Z_design(as.data.frame(Zdf)))
+  }
+  q <- if (is.null(Zmm)) 0L else ncol(Zmm)
+
+  grouped <- group_catcat_observations(Zmm, y_idx_local, K)
+  mapW <- parse_W_levels(W_levels, sep, x_levels, y_levels)
+  O <- as.matrix(table(x_fac, y_fac))
+
+  x_indicator <- if (I > 1) {
+    outer(mapW$i, seq.int(2L, I), `==`) * 1
+  } else {
+    matrix(0, nrow = K, ncol = 0)
+  }
+
+  y_indicator <- if (J > 1) {
+    outer(mapW$j, seq.int(2L, J), `==`) * 1
+  } else {
+    matrix(0, nrow = K, ncol = 0)
+  }
+
+  list(
+    empty = FALSE,
+    x_fac = x_fac,
+    y_fac = y_fac,
+    Zdf = Zdf,
+    x_levels = x_levels,
+    y_levels = y_levels,
+    I = I,
+    J = J,
+    K = K,
+    q = q,
+    n_obs = length(y_idx_local),
+    O = O,
+    W_levels = W_levels,
+    W_obs_labels = W_obs_labels,
+    y_idx = y_idx_local,
+    mapW = mapW,
+    Z_group = grouped$Z_group,
+    counts = grouped$counts,
+    weights = grouped$weights,
+    x_indicator = x_indicator,
+    y_indicator = y_indicator
+  )
+}
+
 # Pack/unpack theta for H1 and H0
 # Baseline constraints: alpha[ref_x]=0, beta[ref_y]=0, gamma[ref_x,*]=0, gamma[*,ref_y]=0
 make_param_index <- function(I, J, q, include_gamma = TRUE) {
@@ -757,6 +1026,9 @@ unpack_theta <- function(theta, I, J, q, include_gamma = TRUE) {
 
   pos <- 1
   take <- function(k) {
+    if (k <= 0) {
+      return(numeric(0))
+    }
     out <- theta[pos:(pos + k - 1)]
     pos <<- pos + k
     out
@@ -804,30 +1076,211 @@ unpack_theta <- function(theta, I, J, q, include_gamma = TRUE) {
   )
 }
 
+expand_theta_with_gamma <- function(theta, I, J, q) {
+  idx0 <- make_param_index(I, J, q, include_gamma = FALSE)
+  idx1 <- make_param_index(I, J, q, include_gamma = TRUE)
+
+  stopifnot(length(theta) == idx0$p_total)
+
+  take_block <- function(values, pos, k) {
+    if (k <= 0) {
+      return(list(values = numeric(0), pos = pos))
+    }
+
+    list(
+      values = values[pos:(pos + k - 1L)],
+      pos = pos + k
+    )
+  }
+
+  pos <- 1L
+  block <- take_block(theta, pos, idx0$p_alpha)
+  alpha_free <- block$values
+  pos <- block$pos
+
+  block <- take_block(theta, pos, idx0$p_beta)
+  beta_free <- block$values
+  pos <- block$pos
+
+  block <- take_block(theta, pos, idx0$p_lambda)
+  lambda_free <- block$values
+  pos <- block$pos
+
+  block <- take_block(theta, pos, idx0$p_kappa)
+  kappa_free <- block$values
+
+  c(
+    alpha_free,
+    beta_free,
+    rep(0, idx1$p_gamma),
+    lambda_free,
+    kappa_free
+  )
+}
+
 # Compute eta (n x K) for all joint outcomes in W_levels
-compute_eta <- function(pars, mapW, Zmm, n_obs) {
-  # mapW$i, mapW$j are length K vectors
+compute_eta <- function(pars, mapW, Zmm = NULL, n_rows = NULL) {
   K <- length(mapW$i)
   q <- if (is.null(Zmm)) 0L else ncol(Zmm)
-
-  eta <- matrix(0, nrow = n_obs, ncol = K)
+  if (is.null(n_rows)) {
+    n_rows <- if (q > 0) nrow(Zmm) else 1L
+  }
 
   # intercept part per category k
   base_cat <- pars$alpha[mapW$i] +
     pars$beta[mapW$j] +
     pars$gamma[cbind(mapW$i, mapW$j)]
-  eta <- eta + matrix(base_cat, nrow = n_obs, ncol = K, byrow = TRUE)
+  eta <- matrix(base_cat, nrow = n_rows, ncol = K, byrow = TRUE)
 
   # Z slopes
   if (q > 0) {
-    slope_mat <- matrix(0, nrow = K, ncol = q)
-    for (k in seq_len(K)) {
-      slope_mat[k, ] <- pars$lambda[mapW$i[k], ] + pars$kappa[mapW$j[k], ]
-    }
+    slope_mat <- pars$lambda[mapW$i, , drop = FALSE] +
+      pars$kappa[mapW$j, , drop = FALSE]
     eta <- eta + Zmm %*% t(slope_mat)
   }
 
   eta
+}
+
+evaluate_structured_mnl <- function(theta, prep, include_gamma = TRUE) {
+  pars <- unpack_theta(theta, prep$I, prep$J, prep$q, include_gamma)
+  eta <- compute_eta(
+    pars,
+    prep$mapW,
+    Zmm = prep$Z_group,
+    n_rows = nrow(prep$counts)
+  )
+  pi_hat <- softmax_rows(eta)
+
+  if (any(!is.finite(pi_hat)) || any(pi_hat <= 0)) {
+    return(list(
+      nll = 1e12,
+      grad = rep(0, length(theta)),
+      pi_hat = pi_hat,
+      params = pars,
+      logLik = -1e12,
+      expected_counts = matrix(
+        0,
+        nrow = prep$I,
+        ncol = prep$J,
+        dimnames = list(prep$x_levels, prep$y_levels)
+      )
+    ))
+  }
+
+  log_pi <- log(pi_hat)
+  nll <- -sum(prep$counts * log_pi)
+
+  resid <- prep$counts - pi_hat * prep$weights
+  resid_by_cell <- matrix(
+    colSums(resid),
+    nrow = prep$I,
+    ncol = prep$J,
+    byrow = FALSE
+  )
+
+  alpha_grad <- if (prep$I > 1) rowSums(resid_by_cell)[-1] else numeric(0)
+  beta_grad <- if (prep$J > 1) colSums(resid_by_cell)[-1] else numeric(0)
+  gamma_grad <- if (include_gamma && prep$I > 1 && prep$J > 1) {
+    as.vector(resid_by_cell[-1, -1, drop = FALSE])
+  } else {
+    numeric(0)
+  }
+
+  if (prep$q > 0 && prep$I > 1) {
+    resid_x <- resid %*% prep$x_indicator
+    lambda_grad <- as.vector(t(crossprod(prep$Z_group, resid_x)))
+  } else {
+    lambda_grad <- numeric(0)
+  }
+
+  if (prep$q > 0 && prep$J > 1) {
+    resid_y <- resid %*% prep$y_indicator
+    kappa_grad <- as.vector(t(crossprod(prep$Z_group, resid_y)))
+  } else {
+    kappa_grad <- numeric(0)
+  }
+
+  grad_ll <- c(
+    alpha_grad,
+    beta_grad,
+    gamma_grad,
+    lambda_grad,
+    kappa_grad
+  )
+
+  fitted_counts <- pi_hat * prep$weights
+  expected_counts <- matrix(
+    colSums(fitted_counts),
+    nrow = prep$I,
+    ncol = prep$J,
+    byrow = FALSE,
+    dimnames = list(prep$x_levels, prep$y_levels)
+  )
+
+  list(
+    nll = nll,
+    grad = -grad_ll,
+    pi_hat = pi_hat,
+    params = pars,
+    logLik = -nll,
+    expected_counts = expected_counts
+  )
+}
+
+fit_structured_mnl_prepared <- function(
+  prep,
+  include_gamma = TRUE,
+  start = NULL
+) {
+  idx <- make_param_index(prep$I, prep$J, prep$q, include_gamma)
+  theta0 <- if (is.null(start)) rep(0, idx$p_total) else start
+
+  if (length(theta0) != idx$p_total) {
+    stop("Starting value has the wrong length for this model.")
+  }
+
+  last_theta <- NULL
+  last_eval <- NULL
+
+  evaluate_cached <- function(theta) {
+    if (!is.null(last_theta) && isTRUE(all(theta == last_theta))) {
+      return(last_eval)
+    }
+
+    eval_res <- evaluate_structured_mnl(theta, prep, include_gamma)
+    last_theta <<- theta
+    last_eval <<- eval_res
+    eval_res
+  }
+
+  fit <- stats::optim(
+    par = theta0,
+    fn = function(theta) evaluate_cached(theta)$nll,
+    gr = function(theta) evaluate_cached(theta)$grad,
+    method = "BFGS",
+    control = list(maxit = 1000, reltol = 1e-8)
+  )
+
+  if (fit$convergence != 0) {
+    warning(
+      "optim() did not converge (code ", fit$convergence, ") for a ",
+      prep$I, "x", prep$J, " table. VL result may be unreliable."
+    )
+  }
+
+  fit_eval <- evaluate_cached(fit$par)
+
+  list(
+    fit = fit,
+    pi_hat = fit_eval$pi_hat,
+    W_levels = prep$W_levels,
+    x_levels = prep$x_levels,
+    y_levels = prep$y_levels,
+    params = fit_eval$params,
+    logLik = fit_eval$logLik,
+    expected_counts = fit_eval$expected_counts
+  )
 }
 
 # Fit structured multinomial with optim; returns fitted pi and params
@@ -836,120 +1289,19 @@ fit_structured_mnl <- function(
   y_fac,
   Zdf = NULL,
   sep = "___AE___",
-  include_gamma = TRUE
+  include_gamma = TRUE,
+  start = NULL
 ) {
-  x_fac <- droplevels(factor(x_fac))
-  y_fac <- droplevels(factor(y_fac))
-
-  ok <- if (is.null(Zdf) || ncol(Zdf) == 0) {
-    stats::complete.cases(x_fac, y_fac)
-  } else {
-    stats::complete.cases(x_fac, y_fac, Zdf)
+  prep <- prepare_catcat_problem(x_fac, y_fac, Zdf = Zdf, sep = sep)
+  if (isTRUE(prep$empty)) {
+    stop("No complete cases available for the structured cat-cat fit.")
   }
 
-  x_fac <- droplevels(x_fac[ok])
-  y_fac <- droplevels(y_fac[ok])
-  if (!is.null(Zdf) && ncol(Zdf) > 0) {
-    Zdf <- Zdf[ok, , drop = FALSE]
-  }
-
-  x_levels <- levels(x_fac)
-  y_levels <- levels(y_fac)
-  I <- length(x_levels)
-  J <- length(y_levels)
-
-  # joint outcome on FULL support (all I*J combinations, including zero-count cells)
-  grid <- expand.grid(
-    x = as.character(x_levels),
-    y = as.character(y_levels),
-    KEEP.OUT.ATTRS = FALSE,
-    stringsAsFactors = FALSE
+  fit_structured_mnl_prepared(
+    prep,
+    include_gamma = include_gamma,
+    start = start
   )
-  W_levels <- paste(grid$x, grid$y, sep = sep)
-  K <- length(W_levels) # should be I * J
-
-  # observed outcome labels, mapped into the full-support W_levels
-  W_obs_labels <- paste(as.character(x_fac), as.character(y_fac), sep = sep)
-  y_idx_local <- match(W_obs_labels, W_levels)
-
-  if (anyNA(y_idx_local)) {
-    stop("Some observed (X,Y) pairs could not be matched to full W_levels.")
-  }
-
-  # Z design
-  Zmm <- NULL
-  if (!is.null(Zdf) && ncol(Zdf) > 0) {
-    Zmm <- as.matrix(make_Z_design(as.data.frame(Zdf)))
-  }
-  q <- if (is.null(Zmm)) 0L else ncol(Zmm)
-
-  mapW <- parse_W_levels(W_levels, sep, x_levels, y_levels)
-
-  idx <- make_param_index(I, J, q, include_gamma)
-  theta0 <- rep(0, idx$p_total)
-
-  negloglik <- function(theta) {
-    pars <- unpack_theta(theta, I, J, q, include_gamma)
-    eta <- compute_eta(pars, mapW, Zmm, n_obs = length(y_idx_local))
-    pi <- softmax_rows(eta)
-
-    p_obs <- pi[cbind(seq_len(nrow(pi)), y_idx_local)]
-    if (any(!is.finite(p_obs)) || any(p_obs <= 0)) {
-      return(1e12)
-    }
-    -sum(log(p_obs))
-  }
-
-  fit <- stats::optim(
-    par = theta0,
-    fn = negloglik,
-    method = "BFGS",
-    control = list(maxit = 1000, reltol = 1e-8)
-  )
-
-  if (fit$convergence != 0) {
-    warning(
-      "optim() did not converge (code ", fit$convergence, ") for a ",
-      I, "x", J, " table. VL result may be unreliable."
-    )
-  }
-
-  pars_hat <- unpack_theta(fit$par, I, J, q, include_gamma)
-  eta_hat <- compute_eta(pars_hat, mapW, Zmm, n_obs = length(y_idx_local))
-  pi_hat <- softmax_rows(eta_hat)
-
-  list(
-    fit = fit,
-    pi_hat = pi_hat,
-    y_idx = y_idx_local,
-    W_obs_labels = W_obs_labels,
-    W_levels = W_levels,
-    x_levels = x_levels,
-    y_levels = y_levels,
-    params = pars_hat
-  )
-}
-
-expected_counts_from_pi <- function(
-  pi_hat,
-  W_levels,
-  x_levels,
-  y_levels,
-  sep = "___AE___"
-) {
-  I <- length(x_levels)
-  J <- length(y_levels)
-  E <- matrix(0, nrow = I, ncol = J, dimnames = list(x_levels, y_levels))
-
-  parts <- strsplit(W_levels, split = sep, fixed = TRUE)
-  wx <- vapply(parts, `[[`, "", 1)
-  wy <- vapply(parts, `[[`, "", 2)
-
-  col_sums <- colSums(pi_hat)
-  for (k in seq_along(W_levels)) {
-    E[wx[k], wy[k]] <- col_sums[k]
-  }
-  E
 }
 
 safe_pearson_cell <- function(O, E) {
@@ -1000,19 +1352,9 @@ make_catcat_result <- function(
 
 compute_local_tables <- function(O, E0) {
   D <- O - E0
-
-  R <- matrix(
-    NA_real_,
-    nrow = nrow(O),
-    ncol = ncol(O),
-    dimnames = dimnames(O)
-  )
-
-  for (i in seq_len(nrow(O))) {
-    for (j in seq_len(ncol(O))) {
-      R[i, j] <- safe_pearson_cell(O[i, j], E0[i, j])
-    }
-  }
+  R <- (O - E0) / sqrt(E0)
+  R[!is.finite(R) | E0 <= 0] <- NA_real_
+  dimnames(R) <- dimnames(O)
 
   list(D = D, R = R)
 }
@@ -1029,6 +1371,92 @@ compute_lr_stats <- function(ll0, ll1, df, n) {
   list(G2 = G2, p_value = p_value, VL = VL)
 }
 
+normalize_threshold_range <- function(x, default_min = 0, default_max = 1) {
+  if (is.null(x) || length(x) == 0) {
+    return(c(default_min, default_max))
+  }
+  if (length(x) == 1) {
+    return(c(default_min, x[[1]]))
+  }
+
+  rng <- as.numeric(x[1:2])
+  c(min(rng, na.rm = TRUE), max(rng, na.rm = TRUE))
+}
+
+apply_p_value_threshold <- function(mat, p_mat, threshold_p) {
+  if (is.null(p_mat)) {
+    return(mat)
+  }
+
+  p_rng <- normalize_threshold_range(threshold_p, default_min = 0, default_max = 0.2)
+  sig_mask <- !is.na(p_mat) & p_mat >= p_rng[1] & p_mat <= p_rng[2]
+  mat[!sig_mask] <- 0
+  mat
+}
+
+prune_isolated_nodes <- function(mat) {
+  if (is.null(mat) || nrow(mat) == 0 || ncol(mat) == 0) {
+    return(mat)
+  }
+
+  pruned <- mat
+  repeat {
+    adjacency <- (abs(pruned) > 0)
+    diag(adjacency) <- FALSE
+    keep <- rowSums(adjacency) > 0
+
+    if (all(keep) || !any(keep)) {
+      break
+    }
+
+    pruned <- pruned[keep, keep, drop = FALSE]
+    if (nrow(pruned) == 0 || ncol(pruned) == 0) {
+      break
+    }
+  }
+
+  pruned
+}
+
+compute_g2_contributions <- function(O, E0) {
+  contrib <- matrix(0, nrow = nrow(O), ncol = ncol(O), dimnames = dimnames(O))
+  mask <- (O > 0) & is.finite(E0) & (E0 > 0)
+  contrib[mask] <- 2 * O[mask] * log(O[mask] / E0[mask])
+  contrib[!is.finite(contrib) | contrib < 0] <- 0
+  contrib
+}
+
+select_catcat_display_submatrix <- function(contribution_matrix, max_dim = 7L) {
+  n_rows <- nrow(contribution_matrix)
+  n_cols <- ncol(contribution_matrix)
+
+  if ((n_rows * n_cols) <= (max_dim * max_dim)) {
+    return(list(
+      rows = seq_len(n_rows),
+      cols = seq_len(n_cols),
+      reduced = FALSE,
+      method = "full"
+    ))
+  }
+
+  if (exists("find_optimal_submatrix", mode = "function")) {
+    selection <- tryCatch(
+      find_optimal_submatrix(contribution_matrix, n = max_dim),
+      error = function(e) NULL
+    )
+    if (!is.null(selection)) {
+      selection$reduced <- TRUE
+      selection$method <- "optimal"
+      return(selection)
+    }
+  }
+
+  selection <- find_optimal_submatrix_heuristic(contribution_matrix, n = max_dim)
+  selection$reduced <- TRUE
+  selection$method <- "heuristic"
+  selection
+}
+
 compute_marginal_expected <- function(O) {
   n <- sum(O)
   outer(rowSums(O), colSums(O)) / n
@@ -1039,14 +1467,9 @@ compute_marginal_expected <- function(O) {
 # ----------------------------
 
 compute_unconditional <- function(x_vec, y_vec) {
-  x_fac <- droplevels(factor(x_vec))
-  y_fac <- droplevels(factor(y_vec))
+  prep <- prepare_catcat_problem(x_vec, y_vec, Zdf = NULL, sep = "___AE___")
 
-  ok <- stats::complete.cases(x_fac, y_fac)
-  x_fac <- droplevels(x_fac[ok])
-  y_fac <- droplevels(y_fac[ok])
-
-  if (length(x_fac) == 0) {
+  if (isTRUE(prep$empty)) {
     return(make_catcat_result(
       VL = 0,
       p_value = NA_real_,
@@ -1062,21 +1485,15 @@ compute_unconditional <- function(x_vec, y_vec) {
     ))
   }
 
-  O <- as.matrix(table(x_fac, y_fac))
-  n <- sum(O)
-  I <- nrow(O)
-  J <- ncol(O)
+  O <- prep$O
+  n <- prep$n_obs
+  I <- prep$I
+  J <- prep$J
   df_lr <- (I - 1) * (J - 1)
 
   # H0 fit
   fit0 <- try(
-    fit_structured_mnl(
-      x_fac,
-      y_fac,
-      Zdf = NULL,
-      sep = "___AE___",
-      include_gamma = FALSE
-    ),
+    fit_structured_mnl_prepared(prep, include_gamma = FALSE),
     silent = TRUE
   )
 
@@ -1084,14 +1501,8 @@ compute_unconditional <- function(x_vec, y_vec) {
   if (inherits(fit0, "try-error")) {
     E0 <- compute_marginal_expected(O)
     loc <- compute_local_tables(O, E0)
-
-    G2_ij <- matrix(0, nrow = I, ncol = J, dimnames = dimnames(O))
-    for (i in seq_len(I)) {
-      for (j in seq_len(J)) {
-        G2_ij[i, j] <- safe_g2_cell(O[i, j], E0[i, j])
-      }
-    }
-    G2 <- sum(G2_ij, na.rm = TRUE)
+    mask <- (O > 0) & (E0 > 0)
+    G2 <- sum(2 * O[mask] * log(O[mask] / E0[mask]), na.rm = TRUE)
     p_value <- if (df_lr > 0 && G2 >= 0) {
       1 - stats::pchisq(G2, df = df_lr)
     } else {
@@ -1114,36 +1525,21 @@ compute_unconditional <- function(x_vec, y_vec) {
     ))
   }
 
-  pi0 <- fit0$pi_hat
-  idx_w <- fit0$y_idx
-  colnames(pi0) <- fit0$W_levels
-
-  ll0 <- sum(log(pi0[cbind(seq_along(idx_w), idx_w)]))
-
-  E0 <- expected_counts_from_pi(
-    pi_hat = pi0,
-    W_levels = fit0$W_levels,
-    x_levels = levels(x_fac),
-    y_levels = levels(y_fac),
-    sep = "___AE___"
-  )
+  ll0 <- fit0$logLik
+  E0 <- fit0$expected_counts
   loc <- compute_local_tables(O, E0)
 
   # H1 fit
   fit1 <- try(
-    fit_structured_mnl(
-      x_fac,
-      y_fac,
-      Zdf = NULL,
-      sep = "___AE___",
-      include_gamma = TRUE
+    fit_structured_mnl_prepared(
+      prep,
+      include_gamma = TRUE,
+      start = expand_theta_with_gamma(fit0$fit$par, prep$I, prep$J, prep$q)
     ),
     silent = TRUE
   )
 
-  if (
-    inherits(fit1, "try-error") || !identical(fit1$W_levels, fit0$W_levels)
-  ) {
+  if (inherits(fit1, "try-error")) {
     return(make_catcat_result(
       VL = NA_real_,
       p_value = NA_real_,
@@ -1159,11 +1555,7 @@ compute_unconditional <- function(x_vec, y_vec) {
     ))
   }
 
-  pi1 <- fit1$pi_hat
-  colnames(pi1) <- fit1$W_levels
-  pi1 <- pi1[, fit0$W_levels, drop = FALSE]
-
-  ll1 <- sum(log(pi1[cbind(seq_along(idx_w), idx_w)]))
+  ll1 <- fit1$logLik
   lr <- compute_lr_stats(ll0, ll1, df_lr, n)
 
   params <- fit1$params
@@ -1188,23 +1580,20 @@ compute_unconditional <- function(x_vec, y_vec) {
 # ----------------------------
 
 compute_conditional <- function(x_vec, y_vec, Zdf) {
-  x_fac <- droplevels(factor(x_vec))
-  y_fac <- droplevels(factor(y_vec))
-
   if (is.null(Zdf) || ncol(Zdf) == 0) {
-    res <- compute_unconditional(x_fac, y_fac)
+    res <- compute_unconditional(x_vec, y_vec)
     names(res)[names(res) == "VL"] <- "VL_Z"
     return(res)
   }
 
-  Z <- as.data.frame(Zdf)
+  prep <- prepare_catcat_problem(
+    x_vec,
+    y_vec,
+    Zdf = as.data.frame(Zdf),
+    sep = "___AE___"
+  )
 
-  ok <- stats::complete.cases(x_fac, y_fac, Z)
-  x_fac <- droplevels(x_fac[ok])
-  y_fac <- droplevels(y_fac[ok])
-  Z <- Z[ok, , drop = FALSE]
-
-  if (length(x_fac) == 0) {
+  if (isTRUE(prep$empty)) {
     out <- make_catcat_result(
       VL = 0,
       p_value = NA_real_,
@@ -1222,61 +1611,40 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
     return(out)
   }
 
-  O <- as.matrix(table(x_fac, y_fac))
-  n <- sum(O)
-  I <- nrow(O)
-  J <- ncol(O)
+  O <- prep$O
+  n <- prep$n_obs
+  I <- prep$I
+  J <- prep$J
   df_lr <- (I - 1) * (J - 1)
 
   # H0 fit
   fit0 <- try(
-    fit_structured_mnl(
-      x_fac,
-      y_fac,
-      Zdf = Z,
-      sep = "___AE___",
-      include_gamma = FALSE
-    ),
+    fit_structured_mnl_prepared(prep, include_gamma = FALSE),
     silent = TRUE
   )
 
   # Conditional fallback -> revert to unconditional measure
   if (inherits(fit0, "try-error")) {
-    base_res <- compute_unconditional(x_fac, y_fac)
+    base_res <- compute_unconditional(prep$x_fac, prep$y_fac)
     names(base_res)[names(base_res) == "VL"] <- "VL_Z"
     return(base_res)
   }
 
-  pi0 <- fit0$pi_hat
-  idx_w <- fit0$y_idx
-  colnames(pi0) <- fit0$W_levels
-
-  ll0 <- sum(log(pi0[cbind(seq_along(idx_w), idx_w)]))
-
-  E0 <- expected_counts_from_pi(
-    pi_hat = pi0,
-    W_levels = fit0$W_levels,
-    x_levels = levels(x_fac),
-    y_levels = levels(y_fac),
-    sep = "___AE___"
-  )
+  ll0 <- fit0$logLik
+  E0 <- fit0$expected_counts
   loc <- compute_local_tables(O, E0)
 
   # H1 fit
   fit1 <- try(
-    fit_structured_mnl(
-      x_fac,
-      y_fac,
-      Zdf = Z,
-      sep = "___AE___",
-      include_gamma = TRUE
+    fit_structured_mnl_prepared(
+      prep,
+      include_gamma = TRUE,
+      start = expand_theta_with_gamma(fit0$fit$par, prep$I, prep$J, prep$q)
     ),
     silent = TRUE
   )
 
-  if (
-    inherits(fit1, "try-error") || !identical(fit1$W_levels, fit0$W_levels)
-  ) {
+  if (inherits(fit1, "try-error")) {
     out <- make_catcat_result(
       VL = NA_real_,
       p_value = NA_real_,
@@ -1294,11 +1662,7 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
     return(out)
   }
 
-  pi1 <- fit1$pi_hat
-  colnames(pi1) <- fit1$W_levels
-  pi1 <- pi1[, fit0$W_levels, drop = FALSE]
-
-  ll1 <- sum(log(pi1[cbind(seq_along(idx_w), idx_w)]))
+  ll1 <- fit1$logLik
   lr <- compute_lr_stats(ll0, ll1, df_lr, n)
 
   params <- fit1$params
@@ -1321,15 +1685,65 @@ compute_conditional <- function(x_vec, y_vec, Zdf) {
   out
 }
 
+make_pair_cache_key <- function(v1, v2, control_vars = NULL) {
+  pair_part <- paste(sort(c(v1, v2)), collapse = "||")
+  control_part <- if (is.null(control_vars) || length(control_vars) == 0) {
+    ""
+  } else {
+    paste(sort(control_vars), collapse = "||")
+  }
+
+  paste(pair_part, control_part, sep = "__controls__")
+}
+
+get_cached_pair_result <- function(cache_env, key) {
+  if (is.null(cache_env) || !exists(key, envir = cache_env, inherits = FALSE)) {
+    return(NULL)
+  }
+
+  get(key, envir = cache_env, inherits = FALSE)
+}
+
+set_cached_pair_result <- function(cache_env, key, value) {
+  if (!is.null(cache_env)) {
+    assign(key, value, envir = cache_env)
+  }
+
+  value
+}
+
+# Apply UI thresholds after the expensive association matrix has already been computed.
+apply_association_thresholds <- function(
+  cor_matrix,
+  cor_type_matrix,
+  threshold_num,
+  threshold_cat
+) {
+  cor_filtered <- cor_matrix
+  num_rng <- normalize_threshold_range(threshold_num, default_min = 0, default_max = 1)
+  cat_rng <- normalize_threshold_range(threshold_cat, default_min = 0, default_max = 1)
+
+  cat_mask <- cor_type_matrix %in% c("VL", "VL|Z")
+  other_mask <- cor_type_matrix != "" & !cat_mask
+
+  cor_filtered[cat_mask & (cor_filtered < cat_rng[1] | cor_filtered > cat_rng[2])] <- 0
+  cor_sq <- cor_filtered^2
+  cor_filtered[other_mask & (cor_sq < num_rng[1] | cor_sq > num_rng[2])] <- 0
+
+  diag(cor_filtered) <- 1
+  cor_filtered
+}
+
 # UPDATED : Function to calculate correlations and partial correlations
 # full_data: the complete dataset including control columns (passed explicitly
 #            so this function has no Shiny reactive dependencies).
 calculate_correlations <- function(
   data,
-  threshold_num,
-  threshold_cat,
+  threshold_num = NULL,
+  threshold_cat = NULL,
   control_vars = NULL,
-  full_data = NULL
+  full_data = NULL,
+  pair_cache = NULL
 ) {
   vars <- names(data)
   n <- length(vars)
@@ -1382,7 +1796,7 @@ calculate_correlations <- function(
               r <- cor(resid_x, resid_y, use = "complete.obs")
 
               if (!is.na(r)) {
-                cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
+                cor_val <- abs(r)
                 cor_type <- "Partial r"
 
                 n_eff <- length(resid_x)
@@ -1394,7 +1808,7 @@ calculate_correlations <- function(
               # Fallback to raw Pearson's r if partial fails
               r <- cor(x, y, use = "complete.obs")
               if (!is.na(r)) {
-                cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
+                cor_val <- abs(r)
                 cor_type <- "Pearson's r"
 
                 n_eff <- length(x)
@@ -1406,7 +1820,7 @@ calculate_correlations <- function(
           # Regular Pearson correlation
           r <- cor(x, y, use = "complete.obs")
           if (!is.na(r)) {
-            cor_val <- ifelse(r^2 >= threshold_num, abs(r), 0)
+            cor_val <- abs(r)
             cor_type <- "Pearson's r"
 
             n_eff <- length(x)
@@ -1418,28 +1832,38 @@ calculate_correlations <- function(
       # ---------- Categorical vs categorical (VL) ----------
     } else if (!is_num1 && !is_num2) {
       if (length(x) > 0 && length(y) > 0) {
+        cache_key <- make_pair_cache_key(
+          v1,
+          v2,
+          if (has_controls) control_vars else NULL
+        )
+        cor_result <- get_cached_pair_result(pair_cache, cache_key)
+
+        if (is.null(cor_result)) {
+          if (has_controls && !is.null(control_data)) {
+            cor_result <- compute_conditional(
+              x_vec = x,
+              y_vec = y,
+              Zdf = control_data
+            )
+          } else {
+            cor_result <- compute_unconditional(
+              x_vec = x,
+              y_vec = y
+            )
+          }
+          cor_result <- set_cached_pair_result(pair_cache, cache_key, cor_result)
+        }
+
         if (has_controls && !is.null(control_data)) {
-          cor_result <- compute_conditional(
-            x_vec = x,
-            y_vec = y,
-            Zdf = control_data
-          )
           vl_value <- cor_result[["VL_Z"]]
           cor_type <- "VL|Z"
         } else {
-          cor_result <- compute_unconditional(
-            x_vec = x,
-            y_vec = y
-          )
           vl_value <- cor_result$VL
           cor_type <- "VL"
         }
 
-        cor_val <- ifelse(
-          !is.na(vl_value) && vl_value >= threshold_cat,
-          vl_value,
-          0
-        )
+        cor_val <- ifelse(!is.na(vl_value), vl_value, 0)
         p_val <- cor_result$p_value
       }
 
@@ -1465,7 +1889,7 @@ calculate_correlations <- function(
         )
 
         if (!is.na(res_eta$eta)) {
-          cor_val <- ifelse(res_eta$eta_sq >= threshold_num, res_eta$eta, 0)
+          cor_val <- res_eta$eta
           cor_type <- res_eta$type
           p_val <- res_eta$p_value
         }
@@ -1521,6 +1945,7 @@ server <- function(input, output, session) {
   # Store full dataset for control variable access
   data_env <- new.env()
   data_env$full_data <- reactiveVal(NULL)
+  pair_cache <- new.env(parent = emptyenv())
 
   # NEW: Control variables UI
   output$control_vars_ui <- renderUI({
@@ -1580,6 +2005,10 @@ server <- function(input, output, session) {
     # Store filtered data
     data(data_df)
     data_env$full_data(data_df) # NEW: Store the full dataset with all variables
+    cache_keys <- ls(envir = pair_cache, all.names = TRUE)
+    if (length(cache_keys) > 0) {
+      rm(list = cache_keys, envir = pair_cache)
+    }
 
     # Show a warning if variables were removed
     removed_vars <- setdiff(original_names, names(data_df))
@@ -1735,17 +2164,11 @@ server <- function(input, output, session) {
     selected_vars <- visualization_vars()
     selected_data <- data()[, selected_vars, drop = FALSE]
 
-    # NEW : Force reactivity to threshold AND control changes
-    force(input$threshold_num)
-    force(input$threshold_cat)
-    force(input$control_vars)
-
     calculate_correlations(
-      selected_data,
-      input$threshold_num,
-      input$threshold_cat,
-      input$control_vars,
-      full_data = if (has_controls()) data_env$full_data() else NULL
+      data = selected_data,
+      control_vars = input$control_vars,
+      full_data = if (has_controls()) data_env$full_data() else NULL,
+      pair_cache = pair_cache
     )
   })
 
@@ -1755,18 +2178,16 @@ server <- function(input, output, session) {
 
   filtered_data_for_pairs <- reactive({
     cor_res <- cor_matrix_vals()
-    mat <- cor_res$cor_matrix
+    mat <- apply_association_thresholds(
+      cor_res$cor_matrix,
+      cor_res$cor_type_matrix,
+      input$threshold_num,
+      input$threshold_cat
+    )
     p_mat <- cor_res$p_matrix
 
-    # Apply p-value filter first
-    if (!is.null(p_mat)) {
-      sig_mask <- !is.na(p_mat) & (p_mat <= input$threshold_p)
-      mat[!sig_mask] <- 0
-    }
-
-    # Keep nodes that still have at least one strong & significant association
-    nodes_to_keep <- rowSums(abs(mat) > 0) > 1
-    filtered_matrix <- mat[nodes_to_keep, nodes_to_keep, drop = FALSE]
+    mat <- apply_p_value_threshold(mat, p_mat, input$threshold_p)
+    filtered_matrix <- prune_isolated_nodes(mat)
 
     if (ncol(filtered_matrix) == 0) {
       return(NULL)
@@ -1781,17 +2202,16 @@ server <- function(input, output, session) {
     req(input$threshold_cat)
 
     cor_res <- cor_matrix_vals()
-    mat <- cor_res$cor_matrix
+    mat <- apply_association_thresholds(
+      cor_res$cor_matrix,
+      cor_res$cor_type_matrix,
+      input$threshold_num,
+      input$threshold_cat
+    )
     p_mat <- cor_res$p_matrix
 
-    # Apply p-value filter
-    if (!is.null(p_mat)) {
-      sig_mask <- !is.na(p_mat) & (p_mat <= input$threshold_p)
-      mat[!sig_mask] <- 0
-    }
-
-    nodes_to_keep <- rowSums(abs(mat) > 0) > 1
-    filtered_matrix <- mat[nodes_to_keep, nodes_to_keep, drop = FALSE]
+    mat <- apply_p_value_threshold(mat, p_mat, input$threshold_p)
+    filtered_matrix <- prune_isolated_nodes(mat)
 
     if (ncol(filtered_matrix) == 0) {
       return(NULL)
@@ -1821,19 +2241,17 @@ server <- function(input, output, session) {
     cor_type_matrix <- cor_result$cor_type_matrix
     p_matrix <- cor_result$p_matrix
 
-    # Apply the same p-value threshold as the network
-    cor_filtered <- cor_matrix
-    if (!is.null(p_matrix)) {
-      sig_mask <- !is.na(p_matrix) & (p_matrix <= input$threshold_p)
-      cor_filtered[!sig_mask] <- 0
-    }
+    cor_filtered <- apply_association_thresholds(
+      cor_matrix,
+      cor_type_matrix,
+      input$threshold_num,
+      input$threshold_cat
+    )
+    cor_filtered <- apply_p_value_threshold(cor_filtered, p_matrix, input$threshold_p)
     cor_filtered[is.na(cor_filtered)] <- 0
 
-    # Keep nodes that have at least one retained association (same logic as network)
-    nodes_to_keep <- rowSums(abs(cor_filtered) > 0) > 1
-
-    mat <- cor_filtered[nodes_to_keep, nodes_to_keep, drop = FALSE]
-    type_mat <- cor_type_matrix[nodes_to_keep, nodes_to_keep, drop = FALSE]
+    mat <- prune_isolated_nodes(cor_filtered)
+    type_mat <- cor_type_matrix[colnames(mat), colnames(mat), drop = FALSE]
 
     n_nodes <- ncol(mat)
     edgelist <- which(mat != 0 & upper.tri(mat), arr.ind = TRUE)
@@ -1872,22 +2290,19 @@ server <- function(input, output, session) {
     cor_type_matrix <- cor_result$cor_type_matrix
     p_matrix <- cor_result$p_matrix
 
-    # apply p-value threshold – keep only edges with p <= threshold_p
-    cor_filtered <- cor_matrix
-    if (!is.null(p_matrix)) {
-      sig_mask <- !is.na(p_matrix) & (p_matrix <= input$threshold_p)
-      # zero out non-significant associations
-      cor_filtered[!sig_mask] <- 0
-    }
+    cor_filtered <- apply_association_thresholds(
+      cor_matrix,
+      cor_type_matrix,
+      input$threshold_num,
+      input$threshold_cat
+    )
+    cor_filtered <- apply_p_value_threshold(cor_filtered, p_matrix, input$threshold_p)
 
     cor_matrix_clean <- cor_filtered
     cor_matrix_clean[is.na(cor_matrix_clean)] <- 0
 
-    # Keep nodes that have at least one significant + strong association
-    nodes_to_keep <- rowSums(abs(cor_matrix_clean) > 0) > 1
-
-    mat <- cor_filtered[nodes_to_keep, nodes_to_keep, drop = FALSE]
-    type_mat <- cor_type_matrix[nodes_to_keep, nodes_to_keep, drop = FALSE]
+    mat <- prune_isolated_nodes(cor_matrix_clean)
+    type_mat <- cor_type_matrix[colnames(mat), colnames(mat), drop = FALSE]
 
     validate(
       need(
@@ -2328,19 +2743,32 @@ server <- function(input, output, session) {
             ))
           }
 
+          cache_key <- make_pair_cache_key(
+            v1,
+            v2,
+            if (controls_exist) input$control_vars else NULL
+          )
+          assoc_res <- get_cached_pair_result(pair_cache, cache_key)
+
           if (controls_exist) {
-            assoc_res <- compute_conditional(
-              x_vec = df_full[[v1]],
-              y_vec = df_full[[v2]],
-              Zdf = df_full[, input$control_vars, drop = FALSE]
-            )
+            if (is.null(assoc_res)) {
+              assoc_res <- compute_conditional(
+                x_vec = df_full[[v1]],
+                y_vec = df_full[[v2]],
+                Zdf = df_full[, input$control_vars, drop = FALSE]
+              )
+              assoc_res <- set_cached_pair_result(pair_cache, cache_key, assoc_res)
+            }
             vl_value <- assoc_res[["VL_Z"]]
             assoc_title <- "Conditional categorical association"
           } else {
-            assoc_res <- compute_unconditional(
-              x_vec = df_full[[v1]],
-              y_vec = df_full[[v2]]
-            )
+            if (is.null(assoc_res)) {
+              assoc_res <- compute_unconditional(
+                x_vec = df_full[[v1]],
+                y_vec = df_full[[v2]]
+              )
+              assoc_res <- set_cached_pair_result(pair_cache, cache_key, assoc_res)
+            }
             vl_value <- assoc_res$VL
             assoc_title <- "Unconditional categorical association"
           }
@@ -2357,12 +2785,63 @@ server <- function(input, output, session) {
             )
           )
 
+          contribution_matrix <- compute_g2_contributions(O, E0)
+          submatrix_selection <- select_catcat_display_submatrix(
+            contribution_matrix,
+            max_dim = 7L
+          )
+
+          D_display <- D[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
+          R_display <- R[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
+          contribution_display <- contribution_matrix[
+            submatrix_selection$rows,
+            submatrix_selection$cols,
+            drop = FALSE
+          ]
+
+          display_info_ui <- NULL
+          if (isTRUE(submatrix_selection$reduced)) {
+            total_contribution <- sum(contribution_matrix, na.rm = TRUE)
+            selected_contribution <- sum(contribution_display, na.rm = TRUE)
+            coverage_pct <- if (total_contribution > 0) {
+              100 * selected_contribution / total_contribution
+            } else {
+              NA_real_
+            }
+
+            display_info_ui <- tags$p(
+              style = "font-size:0.85em; color:#666;",
+              paste0(
+                "Large table detected (",
+                nrow(D),
+                "x",
+                ncol(D),
+                " = ",
+                nrow(D) * ncol(D),
+                " cells). Showing the best ",
+                nrow(D_display),
+                "x",
+                ncol(D_display),
+                " submatrix selected from likelihood-ratio cell contributions",
+                if (is.finite(coverage_pct)) {
+                  paste0(
+                    " (",
+                    round(coverage_pct, 1),
+                    "% of total G^2 contribution)."
+                  )
+                } else {
+                  "."
+                }
+              )
+            )
+          }
+
           # Build table for display: values = D, color = R
-          display_df <- as.data.frame.matrix(round(D, 2))
+          display_df <- as.data.frame.matrix(round(D_display, 2))
           display_df <- tibble::rownames_to_column(display_df, var = v1)
 
           # Range for residual coloring
-          max_abs_r <- max(abs(R), na.rm = TRUE)
+          max_abs_r <- max(abs(R_display), na.rm = TRUE)
           if (!is.finite(max_abs_r) || max_abs_r == 0) {
             max_abs_r <- 1
           }
@@ -2378,7 +2857,7 @@ server <- function(input, output, session) {
                 align = "center",
                 cell = function(value, index) {
                   row_name <- display_df[[v1]][index]
-                  r_val <- R[row_name, colname]
+                  r_val <- R_display[row_name, colname]
                   d_val <- value
 
                   if (is.na(r_val)) {
@@ -2451,6 +2930,7 @@ server <- function(input, output, session) {
               style = "font-size:0.85em; color:#666;",
               "Cell values show D = O - E0. Colors are based on Pearson residuals R: red = over-represented, blue = under-represented, darker = stronger."
             ),
+            display_info_ui,
             make_table(display_df, column_defs),
             gamma_table_ui
           )
