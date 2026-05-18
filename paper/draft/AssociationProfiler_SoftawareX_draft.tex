@@ -1,0 +1,315 @@
+%%
+%% Draft prepared from the SoftwareX OSP template.
+%%
+
+\documentclass[preprint,12pt,a4paper]{elsarticle}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+\setlength{\parindent}{0pt}
+
+\journal{SoftwareX}
+
+\begin{document}
+\renewcommand{\labelenumii}{\arabic{enumi}.\arabic{enumii}}
+
+\begin{frontmatter}
+
+\title{AssociationProfiler: Interactive Profiling of Global and Local Conditional Associations in Mixed-Type Data}
+
+\author[aff1]{Thadd\'ee D'haegeleer\corref{cor1}}
+\ead{TODO}
+\author[aff1,aff2]{C\'edric Heuchenne}
+\ead{TODO}
+\author[aff1,aff2]{Antoine Soetewey}
+\ead{TODO}
+\cortext[cor1]{Corresponding author.}
+\address[aff1]{TODO: affiliation}
+\address[aff2]{TODO: affiliation}
+
+\begin{abstract}
+AssociationProfiler is an open-source R Shiny application for profiling unconditional and conditional associations in multivariate datasets containing numerical and categorical variables. For every selected variable pair, the software computes a global association measure, a significance test, and local pairwise diagnostics adapted to numeric--numeric, numeric--categorical, and categorical--categorical cases. Users can filter an interactive association network with sliders for association strength and statistical significance, then inspect retained edges through harmonized unconditional or conditional pair plots. Its main novelty is a unified control-variable workflow based on partial correlations, partial eta-squared, and likelihood-based categorical measures denoted $V_L$ and $V_{L\mid Z}$.
+\end{abstract}
+
+\begin{keyword}
+R Shiny \sep exploratory data analysis \sep association profiling \sep conditional association \sep categorical data \sep likelihood-ratio test \sep correlation network
+\end{keyword}
+
+\end{frontmatter}
+
+\section*{Required Metadata}
+
+\section*{Current code version}
+
+Ancillary data table required for subversion of the codebase. The current manuscript draft refers to the GitHub repository state identified below; the final submission should replace the commit hash by a tagged release if available.
+
+\begin{table}[!h]
+\begin{tabular}{|l|p{6.5cm}|p{6.5cm}|}
+\hline
+\textbf{Nr.} & \textbf{Code metadata description} & \textbf{Please fill in this column} \\
+\hline
+C1 & Current code version & Commit \texttt{56cb1cc}; TODO: replace by release tag \\
+\hline
+C2 & Permanent GitHub link to code/repository used for this code version & \url{https://github.com/Thadhaeg/Partial-association-explorer} \\
+\hline
+C3 & Legal Code License & MIT License \\
+\hline
+C4 & Code versioning system used & Git/GitHub \\
+\hline
+C5 & Software code languages, tools, and services used & R, Shiny, bslib, dplyr, ggplot2, reactable, tidygraph, visNetwork, readxl, janitor, shinyjs, shinycssloaders, nnet, lpSolve \\
+\hline
+C6 & Compilation requirements, operating environments \& dependencies & R with the packages listed in the repository; tested as a local Shiny application. TODO: add R version and platform used for final validation. \\
+\hline
+C7 & If available Link to developer documentation/manual & TODO: repository documentation, vignette, or screencast link \\
+\hline
+C8 & Support email for questions & TODO \\
+\hline
+\end{tabular}
+\caption{Code metadata (mandatory)}
+\label{tab:code-metadata}
+\end{table}
+
+\section{Motivation and significance}
+
+Many exploratory analyses start by asking which variables in a dataset are associated. In practice, this question is difficult when the dataset combines numerical variables, nominal or ordinal factors, and possible confounders. Classical correlation matrices are convenient for numerical variables but are not designed for categorical data; contingency-table measures are useful for categorical pairs but do not directly solve mixed numerical--categorical cases; and marginal pairwise summaries can be misleading when two variables are jointly related to age, education, region, time, or another background variable.
+
+AssociationProfiler addresses this problem as a software problem rather than as a single statistical test. It provides a guided workflow for computing and visualizing both \emph{global} and \emph{local} associations between all selected pairs of variables. Global association is the single strength measure used to draw and filter the network, while a companion significance test provides a $p$-value for the corresponding null hypothesis. Users control the displayed graph with sliders for association strength and statistical significance, so the network can be tuned to highlight either strong, statistically supported patterns or weaker relationships of diagnostic interest. Local association is the observation-, group-, or cell-level diagnostic shown in the pair plots. The same app handles the unconditional case and the conditional case, where users select control variables $Z$ before recomputing the association network.
+
+The software is intended for two audiences. For researchers, it is a fast screening tool before formal modelling: it can reveal which relationships persist after adjustment, which ones are mainly explained by controls, and which categorical cells drive a global association. For non-specialist users such as journalists, students, and data communicators, it offers a visual interface in which statistical choices are made automatically from variable types and outputs are presented with interpretable plots.
+
+Several R packages support parts of this workflow. For numerical variables, correlation-focused packages and plotting tools provide rich correlation matrices and pairwise visual summaries. For categorical variables, classical measures such as Pearson's chi-square statistic, Cramer's $V$, and log-linear models are standard tools \cite{pearson1900,cramer1946,agresti2013}. AssociationExplorer, a related SoftwareX application, demonstrated how an accessible Shiny interface can lower the barrier to marginal association exploration in mixed-type data \cite{soetewey2026}. AssociationProfiler is positioned differently: it focuses on a unified \emph{association profiling} framework, likelihood-based categorical association, local diagnostics, and harmonized conditional/unconditional visual interpretation.
+
+A central methodological contribution is the categorical--categorical measure $V_L$. For two categorical variables $X$ and $Y$, the app compares a null model of independence with an alternative model allowing interaction. Let $\ell_0$ and $\ell_1$ denote the fitted log-likelihoods and let
+\[
+G^2 = 2(\ell_1-\ell_0)
+\]
+be the likelihood-ratio deviance. The app defines
+\[
+V_L = \sqrt{1-\exp(-G^2/n)}.
+\]
+This is the square root of a Cox--Snell likelihood-based coefficient of determination \cite{coxsnell1989}, related to pseudo-$R^2$ measures used in discrete-choice and generalized linear modelling \cite{mcfadden1974,nagelkerke1991}. It is symmetric in $X$ and $Y$, equals zero under the null model, increases monotonically with the per-observation likelihood improvement of the association model, and is built from the same likelihood-ratio statistic used for inference.
+
+This differs from Cramer's $V$, which rescales Pearson's $\chi^2$ statistic by table dimension. Cramer's $V$ is useful for marginal contingency tables, but it is less directly tied to a nested likelihood comparison and has no single natural extension when controls include both numerical and categorical variables. Because $V_L$ is likelihood-based, the app can use the same construction in the conditional case:
+\[
+V_{L\mid Z} = \sqrt{1-\exp(-G^2_{\mid Z}/n)}.
+\]
+The conditional measure therefore summarizes the residual association between $X$ and $Y$ after the separate effects of the controls have been modelled.
+
+\section{Software description}
+
+\subsection{Software architecture}
+
+AssociationProfiler is a standalone Shiny application. The interface follows the analysis pipeline: data upload, variable selection, control-variable selection, association network, pair plots, and help. Users upload a CSV or Excel file and may optionally upload a two-column variable-description file. Variables with no variation are removed during preprocessing. Selected analysis variables become network nodes; selected control variables are used for adjustment but are not drawn as nodes.
+
+\begin{figure}[!ht]
+\centering
+\fbox{\begin{minipage}{0.90\linewidth}
+Placeholder for a workflow screenshot or schematic: data upload $\rightarrow$ variable/control selection $\rightarrow$ association computation $\rightarrow$ filtered network $\rightarrow$ pair plots.
+\end{minipage}}
+\caption{Planned architecture figure. The final paper should replace this placeholder by a screenshot or schematic of the app workflow.}
+\label{fig:workflow}
+\end{figure}
+
+For every pair of selected variables, the backend detects the pair type and computes an association measure, a $p$-value, and a label identifying the model. The result is stored in aligned matrices used by the network and the pair-plot panel. Thresholds are applied after computation: users can filter numeric--numeric and numeric--categorical pairs by a range for $R^2$ or $\eta^2$, categorical--categorical pairs by a range for $V_L$, and all pairs by a range of $p$-values.
+
+\subsection{Software functionalities}
+
+\textbf{Numeric--numeric associations.} In the unconditional case, the app uses Pearson's correlation $r$ and the corresponding $R^2=r^2$ for thresholding. In the conditional case, it uses the added-variable principle: $X$ and $Y$ are separately regressed on the controls $Z$, and the association is the correlation between the residuals. The pair plot is harmonized across cases: raw scatter plots are used without controls, and residual scatter plots are used with controls. Both show the fitted linear trend and can have their axes reversed.
+
+\textbf{Numeric--categorical associations.} For a numerical variable $Y$ and a categorical variable $X$, the unconditional measure is the ANOVA effect size
+\[
+\eta^2=\frac{\mathrm{SSB}}{\mathrm{SST}},
+\]
+the proportion of variance in $Y$ explained by differences between group means. This is more appropriate than applying Pearson correlation to arbitrary numeric encodings of categories. In the conditional case, the app uses an ANCOVA/extra-sum-of-squares construction. It compares a reduced model $Y\sim Z$ to a full model $Y\sim X+Z$ and reports
+\[
+\eta^2_{X\mid Z}=
+\frac{\mathrm{RSS}_{red}-\mathrm{RSS}_{full}}
+{\mathrm{RSS}_{red}-\mathrm{RSS}_{full}+\mathrm{RSS}_{full}}.
+\]
+The corresponding $F$-test provides the global $p$-value. The pair plots are again harmonized: unconditional plots display group means of $Y$ by $X$, while conditional plots display group means of the residualized outcome $Y-\widehat{E}(Y\mid Z)$. Thus the visual object remains a mean plot, but the quantity being averaged changes from raw values to adjusted residuals.
+
+\textbf{Categorical--categorical associations.} The categorical--categorical module treats the pair $(X,Y)$ as a single joint multinomial outcome $W=(X,Y)$ with $I J$ possible categories. The structured linear predictor is
+\[
+\eta_{ij}(z)=\alpha_i+\beta_j+\lambda_i^\top z+\kappa_j^\top z+\gamma_{ij},
+\]
+with corner constraints on the reference row and column. The null model removes the interaction block $\gamma_{ij}$ and corresponds to independence, or conditional independence when controls are present. The alternative model estimates $\gamma_{ij}$ and captures residual association. The fitted null model also produces expected cell counts
+\[
+E^{(0)}_{ij}=\sum_{t=1}^{n}\hat{\pi}^{(0)}_{ij}(Z_t),
+\]
+which equal classical independence expectations in the unconditional case and covariate-adjusted expectations averaged over the observed controls in the conditional case.
+
+This design was chosen after considering Poisson log-linear alternatives. For ordinary contingency tables, Poisson log-linear models are elegant and standard \cite{agresti2013,nelder1972}. With categorical controls, a multiway table can also represent conditional independence. However, this approach becomes fragile in an interactive app when controls may be continuous or numerous: continuous controls must be discretized, arbitrary bins create modelling choices, and multiway tables rapidly become sparse. The structured multinomial likelihood avoids these difficulties by using controls as regression covariates, after model-matrix coding for categorical controls, while preserving a nested likelihood-ratio comparison between a null and an interaction model.
+
+\textbf{Local categorical diagnostics.} For categorical pairs, the pair plot displays a table where the cell value is
+\[
+D_{ij}=O_{ij}-E^{(0)}_{ij},
+\]
+the observed-minus-expected deviation under the null model. Colour represents the Pearson residual
+\[
+R_{ij}=\frac{O_{ij}-E^{(0)}_{ij}}{\sqrt{E^{(0)}_{ij}}},
+\]
+with one colour for over-represented cells, another for under-represented cells, and darker shades for stronger deviations. When available, a separate interaction table displays the estimated $\gamma_{ij}$ values. The same display grammar is used with and without controls: only the definition of the expected table changes.
+
+\begin{figure}[!ht]
+\centering
+\fbox{\begin{minipage}{0.90\linewidth}
+Placeholder for three pair-plot screenshots: scatter/residual scatter, group means/residualized means, and categorical residual table.
+\end{minipage}}
+\caption{Planned pair-plot figure. The final paper should show one example for each variable-type case and, ideally, include conditional and unconditional versions side by side.}
+\label{fig:pairplots}
+\end{figure}
+
+\textbf{Optimal submatrix display for large categorical tables.} Large contingency tables are difficult to read in a browser. The app therefore selects an informative submatrix when the table exceeds the display limit. Let $C_{ij}$ be the nonnegative cell contribution to the likelihood-ratio statistic,
+\[
+C_{ij}=2O_{ij}\log(O_{ij}/E^{(0)}_{ij}),
+\]
+with zero contribution when $O_{ij}=0$. If at most $m$ rows and $m$ columns can be shown, the app solves the binary selection problem
+\[
+\max_{u,v,z}\sum_{i,j} C_{ij}z_{ij},
+\]
+subject to $\sum_i u_i=m_r$, $\sum_j v_j=m_c$, $z_{ij}\leq u_i$, $z_{ij}\leq v_j$, and $z_{ij}\geq u_i+v_j-1$. Here $u_i$ and $v_j$ indicate selected rows and columns, and $z_{ij}$ indicates that cell $(i,j)$ is displayed. The implementation uses \texttt{lpSolve} when available and falls back to a heuristic based on the largest cell contributions. The user sees the selected submatrix and a note reporting that a reduced table is shown, including the proportion of total $G^2$ contribution covered when it can be computed.
+
+\subsection{Sample code snippets analysis}
+
+The following simplified code illustrates the submatrix selection logic. It is included because this feature connects the statistical local diagnostics to the interface design.
+
+\begin{verbatim}
+compute_g2_contributions <- function(O, E0) {
+  C <- matrix(0, nrow = nrow(O), ncol = ncol(O))
+  ok <- (O > 0) & is.finite(E0) & (E0 > 0)
+  C[ok] <- 2 * O[ok] * log(O[ok] / E0[ok])
+  C[!is.finite(C) | C < 0] <- 0
+  C
+}
+
+select_catcat_display_submatrix <- function(C, max_dim = 7L) {
+  if ((nrow(C) * ncol(C)) <= (max_dim * max_dim))
+    return(list(rows = seq_len(nrow(C)),
+                cols = seq_len(ncol(C)),
+                reduced = FALSE))
+  find_optimal_submatrix(C, n = max_dim)
+}
+\end{verbatim}
+
+This code makes explicit that the displayed categories are chosen from the same local likelihood-ratio contributions that explain the global categorical association.
+
+\section{Illustrative examples}
+
+The final submission should include a reproducible example based on a mixed-type survey dataset. The repository currently contains an example Belgian subset of the European Social Survey, and the app can also be demonstrated with EU-SILC household variables. A suitable example would select socio-demographic controls such as age, gender, education, or household type, then compare the unconditional and conditional networks.
+
+The example should proceed in four steps. First, the user uploads the dataset and optional description file. Second, the user selects variables to visualize and controls to adjust for. Third, the app computes the association network, filtered by effect-size and $p$-value ranges. Fourth, the user opens the pair-plot panel to inspect why selected edges remain in the network.
+
+\begin{figure}[!ht]
+\centering
+\fbox{\begin{minipage}{0.90\linewidth}
+Placeholder for app screenshots: variable/control selection and network before/after controls.
+\end{minipage}}
+\caption{Planned illustrative example. A strong final figure would contrast an unconditional association network with a conditional network after selecting controls.}
+\label{fig:network-example}
+\end{figure}
+
+For numeric--numeric pairs, the example can show how a marginal scatter plot changes into an added-variable plot after residualizing both variables on the controls. For numeric--categorical pairs, it can show how raw differences between group means become residualized differences. For categorical--categorical pairs, it can show how observed-minus-expected deviations and Pearson residual colours are interpreted: positive values indicate over-representation relative to the fitted null model, negative values indicate under-representation, and colour intensity indicates standardized local strength.
+
+\begin{figure}[!ht]
+\centering
+\fbox{\begin{minipage}{0.90\linewidth}
+Placeholder for a large categorical table example showing the optimal submatrix message and selected rows/columns.
+\end{minipage}}
+\caption{Planned large-table example. The screenshot should show what the user sees when the optimal submatrix display is activated.}
+\label{fig:submatrix-example}
+\end{figure}
+
+\section{Impact}
+
+AssociationProfiler enables exploratory questions that are difficult to ask with standard pairwise tools. Instead of asking only whether two variables are marginally associated, users can ask whether the association remains after controlling for selected background variables. This supports more careful screening in survey analysis, public-data exploration, education, and preliminary research workflows.
+
+The software improves existing exploratory practice in four ways. First, it unifies association measures for all common pair types in a single interface. Second, it makes conditional association analysis accessible without requiring users to write regression, ANOVA, or multinomial likelihood code. Third, it combines effect-size filtering with formal significance tests, allowing users to tune the network with strength and $p$-value sliders rather than relying on a single threshold. Fourth, it connects global network edges to local diagnostics so users can inspect the pattern behind each association. This is particularly important for categorical data, where a global statistic may be driven by a small number of over- or under-represented cells.
+
+The likelihood-based categorical module is expected to be useful beyond the immediate Shiny app. The $V_L$ and $V_{L\mid Z}$ measures provide a practical way to express categorical association strength using the same likelihood-ratio comparison used for significance testing. The conditional version allows numerical and categorical controls to enter the same framework, avoiding the need to discretize continuous controls into multiway contingency tables. This creates a natural bridge between contingency-table exploration and model-based exploratory analysis.
+
+For non-specialist users, the impact lies in making cautious data exploration easier. Journalists and data communicators often work with public datasets containing mixed variable types and many plausible confounders. The app can help identify associations worth investigating further while making the distinction between marginal and adjusted patterns visible. For researchers and students, the app can serve as a teaching and diagnostic tool for partial correlation, ANCOVA, likelihood-ratio testing, pseudo-$R^2$ measures, and conditional independence.
+
+The software is not intended to establish causal effects. Conditional associations depend on the selected controls and on the adequacy of the working models. Sparse categorical tables, rare categories, separation-like behaviour in multinomial fitting, and misspecified control effects may affect the reliability of both global and local summaries. The app is therefore best understood as a transparent exploratory layer that helps users decide where more formal modelling is warranted.
+
+\section{Conclusions}
+
+AssociationProfiler is an open-source Shiny application for global and local association exploration in mixed-type datasets. It provides unconditional and conditional association measures for numeric--numeric, numeric--categorical, and categorical--categorical pairs; filters the resulting network by effect size and statistical significance; and displays harmonized pair plots that explain the local structure of retained associations.
+
+The main novelties are the integrated control-variable workflow, the likelihood-based $V_L$ and $V_{L\mid Z}$ categorical association measures, the structured multinomial approach for categorical pairs with numerical or categorical controls, residualized pair plots for conditional interpretation, and the optimal submatrix display for large contingency tables.
+
+\section*{Acknowledgements}
+
+TODO: Add funding, project acknowledgements, institutional acknowledgements, and thanks to testers or contributors.
+
+\begin{thebibliography}{00}
+
+\bibitem{pearson1900}
+K. Pearson, On the criterion that a given system of deviations from the probable in the case of a correlated system of variables is such that it can be reasonably supposed to have arisen from random sampling, Philosophical Magazine 50 (1900) 157--175.
+
+\bibitem{cramer1946}
+H. Cram\'er, Mathematical Methods of Statistics, Princeton University Press, Princeton, 1946.
+
+\bibitem{agresti2013}
+A. Agresti, Categorical Data Analysis, 3rd ed., Wiley, Hoboken, 2013.
+
+\bibitem{coxsnell1989}
+D.R. Cox, E.J. Snell, Analysis of Binary Data, 2nd ed., Chapman and Hall, London, 1989.
+
+\bibitem{mcfadden1974}
+D. McFadden, Conditional logit analysis of qualitative choice behavior, in: P. Zarembka (Ed.), Frontiers in Econometrics, Academic Press, New York, 1974, pp. 105--142.
+
+\bibitem{nagelkerke1991}
+N.J.D. Nagelkerke, A note on a general definition of the coefficient of determination, Biometrika 78 (3) (1991) 691--692. \url{https://doi.org/10.1093/biomet/78.3.691}
+
+\bibitem{nelder1972}
+J.A. Nelder, R.W.M. Wedderburn, Generalized linear models, Journal of the Royal Statistical Society: Series A 135 (3) (1972) 370--384.
+
+\bibitem{cohen1973}
+J. Cohen, Eta-squared and partial eta-squared in fixed factor ANOVA designs, Educational and Psychological Measurement 33 (1973) 107--112.
+
+\bibitem{levine2002}
+T.R. Levine, C.R. Hullett, Eta squared, partial eta squared, and misreporting of effect size in communication research, Human Communication Research 28 (4) (2002) 612--625.
+
+\bibitem{soetewey2026}
+A. Soetewey, C. Heuchenne, A. Claes, A. Descampe, AssociationExplorer: A user-friendly Shiny application for exploring associations and visual patterns, SoftwareX 33 (2026) 102483. \url{https://doi.org/10.1016/j.softx.2025.102483}
+
+\bibitem{r}
+R Core Team, R: A language and environment for statistical computing, R Foundation for Statistical Computing, Vienna, Austria, 2024. \url{https://www.R-project.org/}
+
+\bibitem{shiny}
+W. Chang, J. Cheng, J.J. Allaire, C. Sievert, B. Schloerke, Y. Xie, J. Allen, J. McPherson, A. Dipert, B. Borges, shiny: Web application framework for R, R package, 2024. \url{https://CRAN.R-project.org/package=shiny}
+
+\bibitem{visnetwork}
+Almende B.V. and contributors, B. Thieurmel, visNetwork: Network visualization using vis.js library, R package, 2022. \url{https://CRAN.R-project.org/package=visNetwork}
+
+\bibitem{lpsolve}
+M. Berkelaar, lpSolve: Interface to Lp\_solve v. 5.5 to solve linear/integer programs, R package. \url{https://CRAN.R-project.org/package=lpSolve}
+
+\end{thebibliography}
+
+\section*{Current executable software version}
+
+\begin{table}[!h]
+\begin{tabular}{|l|p{6.5cm}|p{6.5cm}|}
+\hline
+\textbf{Nr.} & \textbf{Executable software metadata description} & \textbf{Please fill in this column} \\
+\hline
+S1 & Current software version & Commit \texttt{56cb1cc}; TODO: replace by release tag \\
+\hline
+S2 & Permanent link to executable software of this version & \url{https://github.com/Thadhaeg/Partial-association-explorer} \\
+\hline
+S3 & Legal Software License & MIT License \\
+\hline
+S4 & Computing platforms/Operating Systems & Platform independent where R and package dependencies are available; TODO: tested OS list \\
+\hline
+S5 & Installation requirements \& dependencies & Install R and packages listed in the repository; run the Shiny application from \texttt{app.r}. TODO: add exact installation command or renv lockfile. \\
+\hline
+\end{tabular}
+\caption{Software metadata (optional executable version table)}
+\label{tab:software-metadata}
+\end{table}
+
+\end{document}
