@@ -31,7 +31,7 @@
 \address[aff2]{TODO: affiliation}
 
 \begin{abstract}
-AssociationProfiler is an open-source R Shiny application for profiling unconditional and conditional associations in multivariate datasets containing numerical and categorical variables. For every selected variable pair, the software computes a global association measure, a significance test, and local pairwise diagnostics adapted to numeric--numeric, numeric--categorical, and categorical--categorical cases. Users can filter an interactive association network with sliders for association strength and statistical significance, then inspect retained edges through harmonized unconditional or conditional pair plots. Its main novelty is a unified control-variable workflow based on partial correlations, partial eta-squared, and likelihood-based categorical measures denoted $V_L$ and $V_{L\mid Z}$.
+AssociationProfiler is an open-source R Shiny application for profiling unconditional and conditional associations in multivariate datasets containing numerical and categorical variables. For every selected variable pair, the software computes a global association measure, a significance test, and local pairwise diagnostics adapted to numeric--numeric, numeric--categorical, and categorical--categorical cases. Users can filter an interactive association network with sliders for association strength and statistical significance, then inspect retained edges through harmonized unconditional or conditional pair plots. Its main contribution is the integration of partial correlations, partial eta-squared, and a Linfoot/Cox--Snell-type likelihood-ratio transformation, denoted $V_L$ and extended as $V_{L\mid Z}$, into one control-variable workflow.
 \end{abstract}
 
 \begin{keyword}
@@ -80,9 +80,9 @@ AssociationProfiler addresses this problem as a software problem rather than as 
 
 The software is intended for two audiences. For researchers, it is a fast screening tool before formal modelling: it can reveal which relationships persist after adjustment, which ones are mainly explained by controls, and which categorical cells drive a global association. For non-specialist users such as journalists, students, and data communicators, it offers a visual interface in which statistical choices are made automatically from variable types and outputs are presented with interpretable plots.
 
-Several R packages support parts of this workflow. For numerical variables, correlation-focused packages and plotting tools provide rich correlation matrices and pairwise visual summaries. For categorical variables, classical measures such as Pearson's chi-square statistic, Cramer's $V$, and log-linear models are standard tools \cite{pearson1900,cramer1946,agresti2013}. AssociationExplorer, a related SoftwareX application, demonstrated how an accessible Shiny interface can lower the barrier to marginal association exploration in mixed-type data \cite{soetewey2026}. AssociationProfiler is positioned differently: it focuses on a unified \emph{association profiling} framework, likelihood-based categorical association, local diagnostics, and harmonized conditional/unconditional visual interpretation.
+Several R packages support parts of this workflow. For numerical variables, correlation-focused packages and plotting tools provide rich correlation matrices and pairwise visual summaries. For categorical variables, classical measures such as Pearson's chi-square statistic, Cramer's $V$, information-theoretic association coefficients, and log-linear models are standard tools \cite{pearson1900,cramer1946,linfoot1957,hamdan1971,agresti2013}. AssociationExplorer, a related SoftwareX application, demonstrated how an accessible Shiny interface can lower the barrier to marginal association exploration in mixed-type data \cite{soetewey2026}. AssociationProfiler is positioned differently: it focuses on a unified \emph{association profiling} framework, likelihood-based categorical association, local diagnostics, and harmonized conditional/unconditional visual interpretation.
 
-A central methodological contribution is the categorical--categorical measure $V_L$. For two categorical variables $X$ and $Y$, the app compares a null model of independence with an alternative model allowing interaction. Let $\ell_0$ and $\ell_1$ denote the fitted log-likelihoods and let
+A central component of the categorical--categorical module is the coefficient denoted $V_L$ in the app. This notation is used for clarity within the software and should not be read as a claim that the underlying transformation is new. For two categorical variables $X$ and $Y$, the app compares a null model of independence with an alternative model allowing interaction. Let $\ell_0$ and $\ell_1$ denote the fitted log-likelihoods and let
 \[
 G^2 = 2(\ell_1-\ell_0)
 \]
@@ -90,9 +90,9 @@ be the likelihood-ratio deviance. The app defines
 \[
 V_L = \sqrt{1-\exp(-G^2/n)}.
 \]
-This is the square root of a Cox--Snell likelihood-based coefficient of determination \cite{coxsnell1989}, related to pseudo-$R^2$ measures used in discrete-choice and generalized linear modelling \cite{mcfadden1974,nagelkerke1991}. It is symmetric in $X$ and $Y$, equals zero under the null model, increases monotonically with the per-observation likelihood improvement of the association model, and is built from the same likelihood-ratio statistic used for inference.
+In the unconditional contingency-table case, $G^2/n$ is twice the empirical mutual information between $X$ and $Y$ when natural logarithms are used. Hence $V_L=\sqrt{1-\exp[-2I(X;Y)]}$ is the sample analogue of Linfoot's informational coefficient of correlation \cite{linfoot1957}; related information measures for contingency tables were discussed by Hamdan and Tsokos \cite{hamdan1971}. The same expression is also the square root of a Cox--Snell likelihood-based coefficient of determination \cite{coxsnell1989}, related to pseudo-$R^2$ measures used in discrete-choice and generalized linear modelling \cite{mcfadden1974,nagelkerke1991}. Thus the novelty is not the unconditional transformation itself, but its use as the categorical association coefficient in an interactive conditional association workflow. It is symmetric in $X$ and $Y$, equals zero under the null model, increases monotonically with the per-observation likelihood improvement of the association model, and is built from the same likelihood-ratio statistic used for inference.
 
-This differs from Cramer's $V$, which rescales Pearson's $\chi^2$ statistic by table dimension. Cramer's $V$ is useful for marginal contingency tables, but it is less directly tied to a nested likelihood comparison and has no single natural extension when controls include both numerical and categorical variables. Because $V_L$ is likelihood-based, the app can use the same construction in the conditional case:
+This differs from Cramer's $V$, which rescales Pearson's $\chi^2$ statistic by table dimension. Cramer's $V$ is useful for marginal contingency tables, but it is less directly tied to a nested likelihood comparison and has no single natural extension when controls include both numerical and categorical variables. Because the Linfoot/Cox--Snell transformation is likelihood-based, the app can apply the same construction in the conditional case:
 \[
 V_{L\mid Z} = \sqrt{1-\exp(-G^2_{\mid Z}/n)}.
 \]
@@ -228,7 +228,7 @@ AssociationProfiler enables exploratory questions that are difficult to ask with
 
 The software improves existing exploratory practice in four ways. First, it unifies association measures for all common pair types in a single interface. Second, it makes conditional association analysis accessible without requiring users to write regression, ANOVA, or multinomial likelihood code. Third, it combines effect-size filtering with formal significance tests, allowing users to tune the network with strength and $p$-value sliders rather than relying on a single threshold. Fourth, it connects global network edges to local diagnostics so users can inspect the pattern behind each association. This is particularly important for categorical data, where a global statistic may be driven by a small number of over- or under-represented cells.
 
-The likelihood-based categorical module is expected to be useful beyond the immediate Shiny app. The $V_L$ and $V_{L\mid Z}$ measures provide a practical way to express categorical association strength using the same likelihood-ratio comparison used for significance testing. The conditional version allows numerical and categorical controls to enter the same framework, avoiding the need to discretize continuous controls into multiway contingency tables. This creates a natural bridge between contingency-table exploration and model-based exploratory analysis.
+The likelihood-based categorical module is expected to be useful beyond the immediate Shiny app. The notation $V_L$ makes an established Linfoot/Cox--Snell transformation explicit in the app, while $V_{L\mid Z}$ applies the same transformation to a conditional likelihood-ratio comparison. The conditional version allows numerical and categorical controls to enter the same framework, avoiding the need to discretize continuous controls into multiway contingency tables. This creates a natural bridge between contingency-table exploration and model-based exploratory analysis.
 
 For non-specialist users, the impact lies in making cautious data exploration easier. Journalists and data communicators often work with public datasets containing mixed variable types and many plausible confounders. The app can help identify associations worth investigating further while making the distinction between marginal and adjusted patterns visible. For researchers and students, the app can serve as a teaching and diagnostic tool for partial correlation, ANCOVA, likelihood-ratio testing, pseudo-$R^2$ measures, and conditional independence.
 
@@ -238,7 +238,7 @@ The software is not intended to establish causal effects. Conditional associatio
 
 AssociationProfiler is an open-source Shiny application for global and local association exploration in mixed-type datasets. It provides unconditional and conditional association measures for numeric--numeric, numeric--categorical, and categorical--categorical pairs; filters the resulting network by effect size and statistical significance; and displays harmonized pair plots that explain the local structure of retained associations.
 
-The main novelties are the integrated control-variable workflow, the likelihood-based $V_L$ and $V_{L\mid Z}$ categorical association measures, the structured multinomial approach for categorical pairs with numerical or categorical controls, residualized pair plots for conditional interpretation, and the optimal submatrix display for large contingency tables.
+The main novelties are the integrated control-variable workflow, the extension of an established Linfoot/Cox--Snell-type categorical association coefficient to conditional association through $V_{L\mid Z}$, the structured multinomial approach for categorical pairs with numerical or categorical controls, residualized pair plots for conditional interpretation, and the optimal submatrix display for large contingency tables.
 
 \section*{Acknowledgements}
 
@@ -251,6 +251,12 @@ K. Pearson, On the criterion that a given system of deviations from the probable
 
 \bibitem{cramer1946}
 H. Cram\'er, Mathematical Methods of Statistics, Princeton University Press, Princeton, 1946.
+
+\bibitem{linfoot1957}
+E.H. Linfoot, An informational measure of correlation, Information and Control 1 (1) (1957) 85--89. \url{https://doi.org/10.1016/S0019-9958(57)90116-X}
+
+\bibitem{hamdan1971}
+M.A. Hamdan, C.P. Tsokos, An information measure of association in contingency tables, Information and Control 19 (2) (1971) 174--179. \url{https://doi.org/10.1016/S0019-9958(71)90799-6}
 
 \bibitem{agresti2013}
 A. Agresti, Categorical Data Analysis, 3rd ed., Wiley, Hoboken, 2013.
