@@ -1,199 +1,129 @@
 ---
-title: 'Gala: A Python package for galactic dynamics'
+title: 'AssociationProfiler: Interactive Profiling of Global and Local Conditional Associations in Mixed-Type Data'
 tags:
-  - Python
-  - astronomy
-  - dynamics
-  - galactic dynamics
-  - milky way
+  - R
+  - Shiny
+  - exploratory data analysis
+  - association analysis
+  - conditional association
+  - mixed-type data
+  - correlation network
 authors:
-  - name: Adrian M. Price-Whelan
-    orcid: 0000-0000-0000-0000
-    equal-contrib: true
-    affiliation: "1, 2" # (Multiple affiliations must be quoted)
-  - name: Author Without ORCID
-    equal-contrib: true # (This is how you can denote equal contributions between multiple authors)
-    affiliation: 2
-  - name: Author with no affiliation
-    corresponding: true # (This is how to denote the corresponding author)
-    affiliation: 3
-  - given-names: Ludwig
-    dropping-particle: van
-    surname: Beethoven
-    affiliation: 3
+  - name: Thaddée D'haegeleer
+    corresponding: true
+    affiliation: 1
+  - name: Cédric Heuchenne
+    affiliation: "1, 2"
+  - name: Antoine Soetewey
+    orcid: 0000-0001-8159-0804
+    affiliation: "1, 2"
 affiliations:
- - name: Lyman Spitzer, Jr. Fellow, Princeton University, United States
-   index: 1
-   ror: 00hx57361
- - name: Institution Name, Country
-   index: 2
- - name: Independent Researcher, Country
-   index: 3
-date: 13 August 2017
+  - name: The Center for Applied Public Economics (CAPE), UCLouvain Saint-Louis Bruxelles, Boulevard du Jardin Botanique 43, 1000 Brussels, Belgium
+    index: 1
+  - name: HEC Liège, ULiège, Rue Louvrex 14, 4000 Liège, Belgium
+    index: 2
+date: 19 May 2026
 bibliography: paper.bib
-
-# Optional fields if submitting to a AAS journal too, see this blog post:
-# https://blog.joss.theoj.org/2018/12/a-new-collaboration-with-aas-publishing
-aas-doi: 10.3847/xxxxx <- update this with the DOI from AAS once you know it.
-aas-journal: Astrophysical Journal <- The name of the AAS journal.
 ---
 
 # Summary
 
-The forces on stars, galaxies, and dark matter under external gravitational
-fields lead to the dynamical evolution of structures in the universe. The orbits
-of these bodies are therefore key to understanding the formation, history, and
-future state of galaxies. The field of "galactic dynamics," which aims to model
-the gravitating components of galaxies to study their structure and evolution,
-is now well-established, commonly taught, and frequently used in astronomy.
-Aside from toy problems and demonstrations, the majority of problems require
-efficient numerical tools, many of which require the same base code (e.g., for
-performing numerical orbit integration).
+AssociationProfiler is an open-source R Shiny application [@shiny] for profiling unconditional
+and conditional associations in multivariate datasets that combine numerical and categorical
+variables. For every selected variable pair the application computes a global association
+measure, a significance test, and local pairwise diagnostics adapted to the variable-type
+combination. Users filter an interactive network graph with sliders for association strength
+and statistical significance, then inspect retained edges through harmonised pair plots.
+The application handles all three pair types — numerical–numerical, numerical–categorical,
+and categorical–categorical — and applies the same workflow with or without user-specified
+control variables, enabling direct comparison of marginal and adjusted associations.
+Source code and an example dataset are available at
+<https://github.com/Thadhaeg/Partial-association-explorer>.
 
 # Statement of need
 
-`Gala` is an Astropy-affiliated Python package for galactic dynamics. Python
-enables wrapping low-level languages (e.g., C) for speed without losing
-flexibility or ease-of-use in the user-interface. The API for `Gala` was
-designed to provide a class-based and user-friendly interface to fast (C or
-Cython-optimized) implementations of common operations such as gravitational
-potential and force evaluation, orbit integration, dynamical transformations,
-and chaos indicators for nonlinear dynamics. `Gala` also relies heavily on and
-interfaces well with the implementations of physical units and astronomical
-coordinate systems in the `Astropy` package [@astropy] (`astropy.units` and
-`astropy.coordinates`).
+Exploratory analysis of multivariate data is challenging when a dataset combines continuous
+measurements with nominal or ordinal factors and when plausible confounders are present.
+Classical correlation matrices apply only to numerical variables; contingency-table measures do
+not extend naturally to mixed pair types; and marginal pairwise summaries can be misleading when
+both variables are related to a common background factor such as age, education, or region.
 
-`Gala` was designed to be used by both astronomical researchers and by
-students in courses on gravitational dynamics or astronomy. It has already been
-used in a number of scientific publications [@Pearson:2017] and has also been
-used in graduate courses on Galactic dynamics to, e.g., provide interactive
-visualizations of textbook material [@Binney:2008]. The combination of speed,
-design, and support for Astropy functionality in `Gala` will enable exciting
-scientific explorations of forthcoming data releases from the *Gaia* mission
-[@gaia] by students and experts alike.
+No existing R tool provides a unified interface for all three pair types — numerical–numerical,
+numerical–categorical, and categorical–categorical — together with a consistent control-variable
+workflow applied simultaneously across pair types. AssociationProfiler addresses this gap. It is
+designed for two primary audiences: researchers who need a fast screening tool before formal
+modelling, to identify which associations persist after adjustment for confounders; and
+non-specialist users — journalists, students, and data communicators — who require accessible
+visualisations without writing regression, ANOVA, or multinomial likelihood code.
 
-# State of the field                                                                                                                  
+# State of the field
 
-Several tools exist for galactic dynamics computations:                                                     
-`galpy` [@Bovy:2015] is a Python package with similar goals,
-providing orbit integration and potential classes for galactic dynamics.                                                              
-`NEMO` [@Teuben:1995] is a well-established, comprehensive stellar dynamics                                                           
-toolbox written primarily in C, offering extensive functionality but with a                                                           
-steeper learning curve and less integration with modern Python workflows.                                                             
-Other tools like `GalPot` provide specific Milky Way potential models but lack                                                        
-the broader dynamical analysis capabilities.                                                                                          
-                                                                                                                                        
-`Gala` was built rather than contributing to existing projects for several                                                            
-reasons. First, `Gala` was designed from the ground up to integrate seamlessly                                                        
-with the Astropy ecosystem, using `astropy.units` and `astropy.coordinates`                                                           
-as core dependencies rather than optional features. This tight integration                                                            
-enables natural workflows for astronomers already using Astropy. Second,                                                              
-`Gala`'s object-oriented API with consistent interfaces across subpackages                                                            
-(potentials, integrators, dynamics) provides a more modular and extensible                                                            
-design than alternatives available at the time. Third, `Gala` fills a specific                                                        
-niche between simple demonstration codes and full N-body simulation packages                                                          
-like `Gadget` [@Springel:2005] – it focuses on the common tasks in galactic                                                             
-dynamics research (orbit integration, potential evaluation, coordinate                                                                
-transformations) while maintaining both performance through C implementations                                                         
-and usability through its Python interface.  
+For numerical data, R packages such as corrplot, ggcorrplot, and GGally provide correlation
+matrices and pairwise scatter-plot grids. For categorical pairs, classical association
+measures — Pearson's chi-squared [@pearson1900], Cramér's $V$ [@cramer1946],
+information-theoretic coefficients [@linfoot1957; @hamdan1971], and log-linear models
+[@agresti2013] — are well established. The ggstatsplot package overlays statistical summaries
+on individual bivariate plots but does not offer a network view or a unified conditional-association
+workflow. AssociationExplorer [@soetewey2026] provided an accessible Shiny interface for marginal
+mixed-type associations but does not support control-variable adjustment. AssociationProfiler
+complements these tools by offering a single conditional and unconditional association-profiling
+framework covering all three pair types through one control-variable selection step.
 
 # Software design
 
-`Gala`'s design philosophy is based on three core principles: (1) to provide a
-user-friendly, modular, object-oriented API, (2) to use community tools and
-standards (e.g., Astropy for coordinates and units handling), and (3) to use
-low-level code (C/C++/Cython) for performance while keeping the user interface
-in Python. Within each of the main subpackages in `gala` (`gala.potential`,
-`gala.dynamics`, `gala.integrate`, etc.), we try to maintain a consistent API
-for classes and functions. For example, all potential classes share a common
-base class and implement methods for computing the potential, forces, density,
-and other derived quantities at given positions. This also works for
-compositions of potentials (i.e., multi-component potential models), which
-share the potential base class but also act as a dictionary-like container for
-different potential components. As another example, all integrators implement a
-common interface for numerically integrating orbits. The integrators and core
-potential functions are all implemented in C without support for units, but the
-Python layer handles unit conversions and prepares data to dispatch to the C
-layer appropriately.Within the coordinates subpackage, we extend Astropy's
-coordinate classes to add more specialized coordinate frames and
-transformations that are relevant for Galactic dynamics and Milky Way research.
+AssociationProfiler is a standalone Shiny application [@shiny] built in R [@r] with a five-panel
+interface: data upload, variable selection with optional control variables, association network
+(via visNetwork [@visnetwork]), pair plots, and help. Variables are auto-detected as numerical
+or categorical during preprocessing. Control variables appear in all association computations
+but are excluded from network nodes.
+
+**Numerical–numerical pairs.** Without controls, Pearson's $r$ and $R^2 = r^2$ are reported.
+With controls, both variables are residualised on the controls by ordinary least squares and the
+partial correlation of the residuals is used. Pair plots show raw scatter (no controls) or
+added-variable plots (with controls), both with a fitted linear trend.
+
+**Numerical–categorical pairs.** Without controls, the ANOVA effect size
+$\eta^2 = \mathrm{SSB}/\mathrm{SST}$ is computed [@cohen1973]. With controls, a partial
+$\eta^2_{X|Z}$ is derived from an ANCOVA extra-sum-of-squares comparison between a reduced
+model $(Y \sim Z)$ and a full model $(Y \sim X + Z)$, with an $F$-test providing the $p$-value.
+Pair plots display group means of the raw or residualised outcome, keeping the same visual
+grammar across conditional and unconditional cases.
+
+**Categorical–categorical pairs.** The global association coefficient is
+$$V_L = \sqrt{1 - \exp(-G^2/n)},$$
+where $G^2 = 2(\ell_1 - \ell_0)$ is the likelihood-ratio deviance between a null independence
+model and an interaction alternative, and $n$ is the sample size. Without controls, $V_L$ equals
+the sample analogue of Linfoot's informational coefficient of correlation [@linfoot1957] and the
+square root of a Cox–Snell $R^2$ [@coxsnell1989]. With controls, a structured multinomial model
+regresses the joint outcome $(X, Y)$ on the controls as regression covariates, yielding the
+conditional coefficient
+$$V_{L|Z} = \sqrt{1 - \exp(-G^2_{|Z}/n)}.$$
+This formulation avoids discretising continuous controls into multiway contingency tables while
+preserving the nested likelihood-ratio comparison between the null and alternative models.
+
+**Local diagnostics and large-table display.** Categorical pair plots show
+observed-minus-expected cell deviations $D_{ij} = O_{ij} - E^{(0)}_{ij}$ coloured by
+Pearson residuals $R_{ij} = (O_{ij} - E^{(0)}_{ij})/\sqrt{E^{(0)}_{ij}}$. For large
+contingency tables, an informative submatrix is selected by maximising the sum of cell-level
+likelihood-ratio contributions $C_{ij} = 2 O_{ij} \log(O_{ij}/E^{(0)}_{ij})$ via integer
+programming [@lpsolve], with a greedy heuristic fallback.
 
 # Research impact statement
 
-`Gala` has demonstrated significant research impact and grown both its user base
-and contributor community since its initial release. The package has evolved
-through contributions from over 18 developers beyond the original core developer
-(@adrn), with community members adding new features, reporting bugs, and
-suggesting new features.
-
-While `Gala` started as a tool primarily to support the core developer's
-research, it has expanded organically to support a range of applications across
-domains in astrophysics related to Milky Way and galactic dynamics. The package
-has been used in over 400 publications (according to Google Scholar) spanning
-topics in galactic dynamics such as modeling stellar streams [@Pearson:2017],
-Milky Way mass modeling, and interpreting kinematic and stellar population
-trends in the Galaxy. `Gala` is integrated within the Astropy ecosystem as an
-affiliated package and has built functionality that extends the widely-used
-`astropy.units` and `astropy.coordinates` subpackages. `Gala`'s impact extends
-beyond citations in research: Because of its focus on usability and user
-interface design, `Gala` has also been incorporated into graduate-level galactic
-dynamics curricula at multiple institutions.
-
-`Gala` has been downloaded over 100,000 times from PyPI and conda-forge yearly
-(or ~2,000 downloads per week) over the past few years, demonstrating a broad
-and active user community. Users span career stages from graduate students to
-faculty and other established researchers and represent institutions around the
-world. This broad adoption and active participation validate `Gala`'s role as
-core community infrastructure for galactic dynamics research.
-
-# Mathematics
-
-Single dollars ($) are required for inline mathematics e.g. $f(x) = e^{\pi/x}$
-
-Double dollars make self-standing equations:
-
-$$\Theta(x) = \left\{\begin{array}{l}
-0\textrm{ if } x < 0\cr
-1\textrm{ else}
-\end{array}\right.$$
-
-You can also use plain \LaTeX for equations
-\begin{equation}\label{eq:fourier}
-\hat f(\omega) = \int_{-\infty}^{\infty} f(x) e^{i\omega x} dx
-\end{equation}
-and refer to \autoref{eq:fourier} from text.
-
-# Citations
-
-Citations to entries in paper.bib should be in
-[rMarkdown](http://rmarkdown.rstudio.com/authoring_bibliographies_and_citations.html)
-format.
-
-If you want to cite a software repository URL (e.g. something on GitHub without a preferred
-citation) then you can do it with the example BibTeX entry below for @fidgit.
-
-For a quick reference, the following citation commands can be used:
-- `@author:2001`  ->  "Author et al. (2001)"
-- `[@author:2001]` -> "(Author et al., 2001)"
-- `[@author1:2001; @author2:2001]` -> "(Author1 et al., 2001; Author2 et al., 2002)"
-
-# Figures
-
-Figures can be included like this:
-![Caption for example figure.\label{fig:example}](figure.png)
-and referenced from text using \autoref{fig:example}.
-
-Figure sizes can be customized by adding an optional second parameter:
-![Caption for example figure.](figure.png){ width=20% }
+AssociationProfiler enables exploratory questions that standard pairwise tools cannot answer:
+whether an observed association persists after adjusting for selected confounders, and which
+categorical cells drive a global signal. The conditional workflow applies uniformly across all
+pair types without requiring users to write model-specific code, making cautious data exploration
+accessible to non-specialists. The application can serve as a teaching and diagnostic tool for
+partial correlation, ANCOVA, likelihood-ratio testing, pseudo-$R^2$ measures, and conditional
+independence. A Belgian ESS Round 11 subset is bundled in the repository for immediate use. The full ESS dataset, codebook, and documentation are freely available at https://ess.sikt.no/en/ [@ess2024data; @ess2024doc].
 
 # AI usage disclosure
 
-No generative AI tools were used in the development of this software, the writing
-of this manuscript, or the preparation of supporting materials.
+The authors used ChatGPT to obtain suggestions for English phrasing and to improve clarity and readability during the writing process. All content was critically reviewed and finalized by the authors.
 
 # Acknowledgements
 
-We acknowledge contributions from Brigitta Sipocz, Syrtis Major, and Semyeong
-Oh, and support from Kathryn Johnston during the genesis of this project.
+The three authors thank UCLouvain for funding this research project. The last author gratefully acknowledges the Walloon Region and the *Service public de Wallonie (SPW) Recherche* in Belgium for funding the ODALON research project (Win2Wal 2023 - N°2310019 - ODALON3). The authors additionally thank the researchers from UCLouvain Saint-Louis Brussels involved in the Beamm research project for their feedback on previous versions of the software.
 
 # References
