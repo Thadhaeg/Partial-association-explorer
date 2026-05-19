@@ -34,8 +34,8 @@ variables. For every selected variable pair the application computes a global as
 measure, a significance test, and local pairwise diagnostics adapted to the variable-type
 combination. Users filter an interactive network graph with sliders for association strength
 and statistical significance, then inspect retained edges through harmonised pair plots.
-The application handles all three pair types — numerical–numerical, numerical–categorical,
-and categorical–categorical — and applies the same workflow with or without user-specified
+The application handles all three pair types (numerical-numerical, numerical-categorical,
+and categorical-categorical) and applies the same workflow with or without user-specified
 control variables, enabling direct comparison of marginal and adjusted associations.
 Source code and an example dataset are available at
 <https://github.com/Thadhaeg/Partial-association-explorer>.
@@ -48,21 +48,21 @@ Classical correlation matrices apply only to numerical variables; contingency-ta
 not extend naturally to mixed pair types; and marginal pairwise summaries can be misleading when
 both variables are related to a common background factor such as age, education, or region.
 
-No existing R tool provides a unified interface for all three pair types — numerical–numerical,
-numerical–categorical, and categorical–categorical — together with a consistent control-variable
+No existing R tool provides a unified interface for all three pair types (numerical-numerical,
+numerical-categorical, and categorical-categorical) together with a consistent control-variable
 workflow applied simultaneously across pair types. AssociationProfiler addresses this gap. It is
 designed for two primary audiences: researchers who need a fast screening tool before formal
 modelling, to identify which associations persist after adjustment for confounders; and
-non-specialist users — journalists, students, and data communicators — who require accessible
+non-specialist users (journalists, students, and data communicators) who require accessible
 visualisations without writing regression, ANOVA, or multinomial likelihood code.
 
 # State of the field
 
-For numerical data, R packages such as corrplot, ggcorrplot, and GGally provide correlation
+For numerical data, R packages such as corrplot [@corrplot2024], ggcorrplot [@ggcorrplot2023], and GGally [@GGally2025] provide correlation
 matrices and pairwise scatter-plot grids. For categorical pairs, classical association
-measures — Pearson's chi-squared [@pearson1900], Cramér's $V$ [@cramer1946],
+measures such as Pearson's chi-squared [@pearson1900], Cramér's $V$ [@cramer1946],
 information-theoretic coefficients [@linfoot1957; @hamdan1971], and log-linear models
-[@agresti2013] — are well established. The ggstatsplot package overlays statistical summaries
+[@agresti2013] are well established. The ggstatsplot package [@patil2021ggstatsplot] overlays statistical summaries
 on individual bivariate plots but does not offer a network view or a unified conditional-association
 workflow. AssociationExplorer [@soetewey2026] provided an accessible Shiny interface for marginal
 mixed-type associations but does not support control-variable adjustment. AssociationProfiler
@@ -77,24 +77,24 @@ interface: data upload, variable selection with optional control variables, asso
 or categorical during preprocessing. Control variables appear in all association computations
 but are excluded from network nodes.
 
-**Numerical–numerical pairs.** Without controls, Pearson's $r$ and $R^2 = r^2$ are reported.
+**Numerical-numerical pairs.** Without controls, Pearson's $r$ and $R^2$ are reported.
 With controls, both variables are residualised on the controls by ordinary least squares and the
 partial correlation of the residuals is used. Pair plots show raw scatter (no controls) or
 added-variable plots (with controls), both with a fitted linear trend.
 
-**Numerical–categorical pairs.** Without controls, the ANOVA effect size
+**Numerical-categorical pairs.** Without controls, the ANOVA effect size
 $\eta^2 = \mathrm{SSB}/\mathrm{SST}$ is computed [@cohen1973]. With controls, a partial
 $\eta^2_{X|Z}$ is derived from an ANCOVA extra-sum-of-squares comparison between a reduced
 model $(Y \sim Z)$ and a full model $(Y \sim X + Z)$, with an $F$-test providing the $p$-value.
 Pair plots display group means of the raw or residualised outcome, keeping the same visual
 grammar across conditional and unconditional cases.
 
-**Categorical–categorical pairs.** The global association coefficient is
+**Categorical-categorical pairs.** The global association coefficient is
 $$V_L = \sqrt{1 - \exp(-G^2/n)},$$
 where $G^2 = 2(\ell_1 - \ell_0)$ is the likelihood-ratio deviance between a null independence
 model and an interaction alternative, and $n$ is the sample size. Without controls, $V_L$ equals
 the sample analogue of Linfoot's informational coefficient of correlation [@linfoot1957] and the
-square root of a Cox–Snell $R^2$ [@coxsnell1989]. With controls, a structured multinomial model
+square root of a Cox-Snell $R^2$ [@coxsnell1989]. With controls, a structured multinomial model
 regresses the joint outcome $(X, Y)$ on the controls as regression covariates, yielding the
 conditional coefficient
 $$V_{L|Z} = \sqrt{1 - \exp(-G^2_{|Z}/n)}.$$
