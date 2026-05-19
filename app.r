@@ -20,7 +20,7 @@ if (file.exists("archive.r")) {
 
 ui <- tagList(
   tags$head(
-    tags$title("AssociationExplorer App"),
+    tags$title("AssociationProfiler App"),
     tags$link(rel = "stylesheet", type = "text/css", href = "custom.css")
   ),
   fluidPage(
@@ -35,7 +35,7 @@ ui <- tagList(
       code_font = font_google("Fira Code")
     ),
     tags$div(class = "centered-padding-top"),
-    titlePanel(div("Association Explorer", class = "app-title")),
+    titlePanel(div("AssociationProfiler", class = "app-title")),
     br(),
     tabsetPanel(
       id = "main_tabs",
@@ -175,7 +175,7 @@ ui <- tagList(
           class = "help-container",
           br(),
           br(),
-          h3("How to use the Association Explorer app?"),
+          h3("How to use the AssociationProfiler app?"),
           br(),
           tags$ul(
             tags$li(
