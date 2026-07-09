@@ -237,6 +237,47 @@ make_table <- function(df, columns_defs) {
   )
 }
 
+resolve_variable_description <- function(var_name, descriptions_df = NULL) {
+  if (
+    is.null(descriptions_df) ||
+      !all(c("variable", "description") %in% names(descriptions_df))
+  ) {
+    return(var_name)
+  }
+
+  idx <- match(var_name, descriptions_df$variable)
+  if (is.na(idx)) {
+    return(var_name)
+  }
+
+  desc <- descriptions_df$description[[idx]]
+  if (length(desc) == 0 || is.na(desc) || !nzchar(trimws(as.character(desc)))) {
+    return(var_name)
+  }
+
+  as.character(desc)
+}
+
+format_plot_stat <- function(x, digits = 3) {
+  if (is.null(x) || length(x) == 0 || !is.finite(x[[1]])) {
+    return("NA")
+  }
+
+  formatC(as.numeric(x[[1]]), digits = digits, format = "f")
+}
+
+format_plot_p_value <- function(p_value) {
+  if (is.null(p_value) || length(p_value) == 0 || is.na(p_value[[1]])) {
+    return("NA")
+  }
+
+  if (p_value[[1]] < 0.001) {
+    return("< 0.001")
+  }
+
+  formatC(signif(as.numeric(p_value[[1]]), 3), digits = 3, format = "fg", flag = "#")
+}
+
 # NEW : Helper: compute residuals of y after regressing on controls
 partial_residuals <- function(y, controls_df) {
   if (is.null(controls_df) || ncol(controls_df) == 0) {
@@ -1418,12 +1459,12 @@ prune_isolated_nodes <- function(mat) {
   pruned
 }
 
-compute_g2_contributions <- function(O, E0) {
-  contrib <- matrix(0, nrow = nrow(O), ncol = ncol(O), dimnames = dimnames(O))
-  mask <- (O > 0) & is.finite(E0) & (E0 > 0)
-  contrib[mask] <- 2 * O[mask] * log(O[mask] / E0[mask])
-  contrib[!is.finite(contrib) | contrib < 0] <- 0
-  contrib
+compute_catcat_display_scores <- function(O, E0) {
+  scores <- matrix(0, nrow = nrow(O), ncol = ncol(O), dimnames = dimnames(O))
+  mask <- is.finite(E0) & (E0 > 0)
+  scores[mask] <- ((O[mask] - E0[mask])^2) / E0[mask]
+  scores[!is.finite(scores) | scores < 0] <- 0
+  scores
 }
 
 select_catcat_display_submatrix <- function(contribution_matrix, max_dim = 7L) {
@@ -1890,7 +1931,11 @@ calculate_correlations <- function(
 
         if (!is.na(res_eta$eta)) {
           cor_val <- res_eta$eta
-          cor_type <- res_eta$type
+          cor_type <- if (has_controls && !is.null(control_data)) {
+            "Partial Eta²"
+          } else {
+            "Eta²"
+          }
           p_val <- res_eta$p_value
         }
       }
@@ -2276,9 +2321,9 @@ server <- function(input, output, session) {
           n_catcat,
           " cat–cat (VL/VL|Z), ",
           n_numnum,
-          " num–num (r), ",
+          " num–num (R²), ",
           n_mixed,
-          " mixed (η)"
+          " mixed (η²)"
         )
       )
     )
@@ -2343,7 +2388,23 @@ server <- function(input, output, session) {
     edges$color <- "steelblue"
 
     # Tooltip
-    edges$title <- paste0(type_mat[edgelist], " = ", round(mat[edgelist], 2))
+    edge_types <- type_mat[edgelist]
+    edge_values <- mat[edgelist]
+    edge_labels <- ifelse(
+      edge_types == "Pearson's r",
+      "R²",
+      ifelse(
+        edge_types == "Partial r",
+        "Partial R²",
+        ifelse(edge_types == "Eta²", "Eta²", ifelse(edge_types == "Partial Eta²", "Partial Eta²", edge_types))
+      )
+    )
+    edge_display_values <- ifelse(
+      edge_types %in% c("Pearson's r", "Partial r", "Eta²", "Partial Eta²"),
+      edge_values^2,
+      edge_values
+    )
+    edges$title <- paste0(edge_labels, " = ", round(edge_display_values, 2))
 
     # Lengths
     min_len <- 100
@@ -2422,8 +2483,9 @@ server <- function(input, output, session) {
       v2 <- pairs$var2[i]
 
       # Get the descriptions
-      desc1 <- var_descriptions()$description[var_descriptions()$variable == v1]
-      desc2 <- var_descriptions()$description[var_descriptions()$variable == v2]
+      desc_lookup <- var_descriptions()
+      desc1 <- resolve_variable_description(v1, desc_lookup)
+      desc2 <- resolve_variable_description(v2, desc_lookup)
 
       plotname <- paste0("plot_", i)
       is_num1 <- is.numeric(df[[v1]])
@@ -2501,10 +2563,11 @@ server <- function(input, output, session) {
 
                 # Calculate partial correlation
                 partial_cor <- cor(resid_x, resid_y, use = "complete.obs")
-                partial_cor_text <- ifelse(
-                  is.na(partial_cor),
-                  "NA",
-                  round(partial_cor, 3)
+                partial_r2_text <- format_plot_stat(partial_cor^2)
+                n_eff <- length(resid_x)
+                k_controls <- count_active_controls(control_data)
+                p_val_text <- format_plot_p_value(
+                  p_value_partial_cor(partial_cor, n_eff, k_controls)
                 )
 
                 # Check if axes should be reversed
@@ -2546,20 +2609,23 @@ server <- function(input, output, session) {
                   labs(
                     x = paste0("Residuals of ", x_desc, " | controls"),
                     y = paste0("Residuals of ", y_desc, " | controls"),
-                    title = paste("Added-Variable Plot (Partial Regression)"),
-                    subtitle = paste(
-                      "Partial correlation =",
-                      partial_cor_text,
-                      "| Slope =",
+                    title = "Added-Variable Plot (Partial Regression)",
+                    subtitle = paste0(
+                      "Partial R² = ",
+                      partial_r2_text,
+                      " | p-value = ",
+                      p_val_text,
+                      " | Slope = ",
                       slope_text,
-                      "| Controlling for:",
+                      "\nControls: ",
                       paste(input$control_vars, collapse = ", ")
                     )
                   ) +
                   theme_minimal(base_size = 14) +
                   theme(
                     plot.title = element_text(face = "bold"),
-                    plot.subtitle = element_text(color = "gray40", size = 10)
+                    plot.subtitle = element_text(color = "gray40", size = 10),
+                    plot.title.position = "plot"
                   )
               },
               error = function(e) {
@@ -2569,10 +2635,9 @@ server <- function(input, output, session) {
                 } else {
                   NA
                 }
-                cor_text <- ifelse(
-                  is.na(current_cor),
-                  "NA",
-                  round(current_cor, 3)
+                r2_text <- format_plot_stat(current_cor^2)
+                p_val_text <- format_plot_p_value(
+                  p_value_partial_cor(current_cor, nrow(plot_data), 0)
                 )
 
                 ggplot(plot_data, aes(x = .data[[v1]], y = .data[[v2]])) +
@@ -2592,10 +2657,12 @@ server <- function(input, output, session) {
                     x = desc1,
                     y = desc2,
                     title = "Regular Scatter Plot (Partial Correlation Failed)",
-                    subtitle = paste(
-                      "Raw correlation =",
-                      cor_text,
-                      "| Error:",
+                    subtitle = paste0(
+                      "R² = ",
+                      r2_text,
+                      " | p-value = ",
+                      p_val_text,
+                      " | Error: ",
                       e$message
                     )
                   ) +
@@ -2605,7 +2672,12 @@ server <- function(input, output, session) {
                   scale_y_continuous(
                     labels = label_number(big.mark = ",", decimal.mark = ".")
                   ) +
-                  theme_minimal(base_size = 14)
+                  theme_minimal(base_size = 14) +
+                  theme(
+                    plot.title = element_text(face = "bold"),
+                    plot.subtitle = element_text(color = "gray40", size = 10),
+                    plot.title.position = "plot"
+                  )
               }
             )
           })
@@ -2635,10 +2707,9 @@ server <- function(input, output, session) {
                 plot_data[[v2]],
                 use = "complete.obs"
               )
-              cor_text <- ifelse(
-                is.na(current_cor),
-                "NA",
-                round(current_cor, 3)
+              r2_text <- format_plot_stat(current_cor^2)
+              p_val_text <- format_plot_p_value(
+                p_value_partial_cor(current_cor, nrow(plot_data), 0)
               )
 
               # Calculate slope (respect reversed axes)
@@ -2670,10 +2741,13 @@ server <- function(input, output, session) {
                 labs(
                   x = x_desc,
                   y = y_desc,
-                  title = paste(
-                    "Scatter Plot | Correlation =",
-                    cor_text,
-                    "| Slope =",
+                  title = "Scatter Plot",
+                  subtitle = paste0(
+                    "R² = ",
+                    r2_text,
+                    " | p-value = ",
+                    p_val_text,
+                    " | Slope = ",
                     slope_text_regular
                   )
                 ) +
@@ -2683,7 +2757,12 @@ server <- function(input, output, session) {
                 scale_y_continuous(
                   labels = label_number(big.mark = ",", decimal.mark = ".")
                 ) +
-                theme_minimal(base_size = 14)
+                theme_minimal(base_size = 14) +
+                theme(
+                  plot.title = element_text(face = "bold"),
+                  plot.subtitle = element_text(color = "gray40", size = 10),
+                  plot.title.position = "plot"
+                )
             } else {
               plot.new()
               text(0.5, 0.5, "No valid data available", cex = 1.5, adj = 0.5)
@@ -2785,15 +2864,15 @@ server <- function(input, output, session) {
             )
           )
 
-          contribution_matrix <- compute_g2_contributions(O, E0)
+          display_score_matrix <- compute_catcat_display_scores(O, E0)
           submatrix_selection <- select_catcat_display_submatrix(
-            contribution_matrix,
+            display_score_matrix,
             max_dim = 7L
           )
 
           D_display <- D[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
           R_display <- R[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
-          contribution_display <- contribution_matrix[
+          score_display <- display_score_matrix[
             submatrix_selection$rows,
             submatrix_selection$cols,
             drop = FALSE
@@ -2801,10 +2880,10 @@ server <- function(input, output, session) {
 
           display_info_ui <- NULL
           if (isTRUE(submatrix_selection$reduced)) {
-            total_contribution <- sum(contribution_matrix, na.rm = TRUE)
-            selected_contribution <- sum(contribution_display, na.rm = TRUE)
-            coverage_pct <- if (total_contribution > 0) {
-              100 * selected_contribution / total_contribution
+            total_score <- sum(display_score_matrix, na.rm = TRUE)
+            selected_score <- sum(score_display, na.rm = TRUE)
+            coverage_pct <- if (total_score > 0) {
+              100 * selected_score / total_score
             } else {
               NA_real_
             }
@@ -2822,12 +2901,12 @@ server <- function(input, output, session) {
                 nrow(D_display),
                 "x",
                 ncol(D_display),
-                " submatrix selected from likelihood-ratio cell contributions",
+                " submatrix selected from squared Pearson-residual scores",
                 if (is.finite(coverage_pct)) {
                   paste0(
                     " (",
                     round(coverage_pct, 1),
-                    "% of total G^2 contribution)."
+                    "% of total score)."
                   )
                 } else {
                   "."
@@ -2836,8 +2915,8 @@ server <- function(input, output, session) {
             )
           }
 
-          # Build table for display: values = D, color = R
-          display_df <- as.data.frame.matrix(round(D_display, 2))
+          # Build table for display: values = R, color = R
+          display_df <- as.data.frame.matrix(round(R_display, 2))
           display_df <- tibble::rownames_to_column(display_df, var = v1)
 
           # Range for residual coloring
@@ -2858,10 +2937,12 @@ server <- function(input, output, session) {
                 cell = function(value, index) {
                   row_name <- display_df[[v1]][index]
                   r_val <- R_display[row_name, colname]
-                  d_val <- value
 
                   if (is.na(r_val)) {
-                    return(div(style = "padding:4px;", as.character(d_val)))
+                    return(div(
+                      style = "background-color:#f8f9fa; padding:4px; min-height:1.6em;",
+                      ""
+                    ))
                   }
 
                   # intensity from |R|
@@ -2878,9 +2959,9 @@ server <- function(input, output, session) {
                     style = paste0(
                       "background-color:",
                       bg_col,
-                      "; padding:4px; font-weight:500;"
+                      "; padding:4px; min-height:1.6em; font-weight:500;"
                     ),
-                    format(round(as.numeric(d_val), 2), nsmall = 2)
+                    format(round(as.numeric(r_val), 2), nsmall = 2)
                   )
                 }
               )
@@ -2888,51 +2969,27 @@ server <- function(input, output, session) {
           })
           names(column_defs) <- names(display_df)
 
-          gamma_table_ui <- NULL
-          if (!is.null(assoc_res$gamma)) {
-            # Drop reference row and column (always zero by corner constraint)
-            gmat <- assoc_res$gamma
-            if (nrow(gmat) > 1 && ncol(gmat) > 1) {
-              gmat <- gmat[-1, -1, drop = FALSE]
-            }
-            gamma_df <- as.data.frame.matrix(round(gmat, 3))
-            gamma_df <- tibble::rownames_to_column(gamma_df, var = v1)
-            gamma_table_ui <- tagList(
-              br(),
-              h4("Interaction parameters \u03B3"),
-              reactable(
-                gamma_df,
-                bordered = TRUE,
-                striped = TRUE,
-                highlight = TRUE,
-                defaultPageSize = min(25, nrow(gamma_df)),
-                theme = reactableTheme(headerStyle = list(fontWeight = "bold"))
-              )
-            )
-          }
-
           tagList(
             h4(assoc_title),
             tags$p(
               style = "font-size:0.9em; color:#666;",
               paste0(
                 if (controls_exist) "VL|Z = " else "VL = ",
-                round(vl_value, 3),
+                format_plot_stat(vl_value),
                 " | p-value = ",
-                ifelse(
-                  is.na(assoc_res$p_value),
-                  "NA",
-                  signif(assoc_res$p_value, 3)
-                )
+                format_plot_p_value(assoc_res$p_value)
               )
             ),
             tags$p(
               style = "font-size:0.85em; color:#666;",
-              "Cell values show D = O - E0. Colors are based on Pearson residuals R: red = over-represented, blue = under-represented, darker = stronger."
+              paste0("Rows: ", desc1, " | Columns: ", desc2)
+            ),
+            tags$p(
+              style = "font-size:0.85em; color:#666;",
+              "Cell values and colors show Pearson residuals R: red = over-represented, blue = under-represented, darker = stronger."
             ),
             display_info_ui,
-            make_table(display_df, column_defs),
-            gamma_table_ui
+            make_table(display_df, column_defs)
           )
         })
 
@@ -2979,6 +3036,14 @@ server <- function(input, output, session) {
                 )
               )
 
+            res_eta <- calculate_partial_eta_squared_with_F(
+              num_var = plot_data[[num_var]],
+              cat_var = plot_data[[cat_var]],
+              control_data = NULL
+            )
+            assoc_text <- format_plot_stat(res_eta$eta_sq)
+            p_val_text <- format_plot_p_value(res_eta$p_value)
+
             ggplot(df_sum, aes(x = .data[[cat_var]], y = mean_val)) +
               geom_col(fill = "steelblue", width = 0.6) +
               geom_text(
@@ -2995,12 +3060,24 @@ server <- function(input, output, session) {
               ) +
               labs(
                 x = desc_cat,
-                y = paste0('Mean of "', desc_num, '"')
+                y = paste0('Mean of "', desc_num, '"'),
+                title = "Group Means Plot",
+                subtitle = paste0(
+                  "Eta² = ",
+                  assoc_text,
+                  " | p-value = ",
+                  p_val_text
+                )
               ) +
               scale_y_continuous(
                 labels = label_number(big.mark = ",", decimal.mark = ".")
               ) +
               theme_minimal(base_size = 14) +
+              theme(
+                plot.title = element_text(face = "bold"),
+                plot.subtitle = element_text(color = "gray40", size = 10),
+                plot.title.position = "plot"
+              ) +
               coord_flip()
           } else {
             #  ===== CONDITIONAL CASE: RESIDUALIZED MEANS =====
@@ -3090,6 +3167,18 @@ server <- function(input, output, session) {
               return()
             }
 
+            res_eta <- calculate_partial_eta_squared_with_F(
+              num_var = df_full[[response_name]],
+              cat_var = df_full[[cat_name]],
+              control_data = if (length(controls_kept) > 0) {
+                df_full[, controls_kept, drop = FALSE]
+              } else {
+                NULL
+              }
+            )
+            assoc_text <- format_plot_stat(res_eta$eta_sq)
+            p_val_text <- format_plot_p_value(res_eta$p_value)
+
             # 1) Residualize Y on controls only: num_var ~ controls_kept
             formula_ctrl <- if (length(controls_kept) > 0) {
               as.formula(paste(
@@ -3138,12 +3227,25 @@ server <- function(input, output, session) {
                     'Mean of "',
                     desc_num,
                     '" (unadjusted; residualization failed)'
+                  ),
+                  title = "Group Means Plot (Fallback)",
+                  subtitle = paste0(
+                    "Partial Eta² = ",
+                    assoc_text,
+                    " | p-value = ",
+                    p_val_text,
+                    " | Residualization failed"
                   )
                 ) +
                 scale_y_continuous(
                   labels = label_number(big.mark = ",", decimal.mark = ".")
                 ) +
                 theme_minimal(base_size = 14) +
+                theme(
+                  plot.title = element_text(face = "bold"),
+                  plot.subtitle = element_text(color = "gray40", size = 10),
+                  plot.title.position = "plot"
+                ) +
                 coord_flip()
             } else {
               # 2) Compute residuals and then group means of residuals
@@ -3180,8 +3282,13 @@ server <- function(input, output, session) {
                     desc_num,
                     '" (after removing controls)'
                   ),
-                  subtitle = paste(
-                    "Residualized on:",
+                  title = "Residualized Group Means Plot",
+                  subtitle = paste0(
+                    "Partial Eta² = ",
+                    assoc_text,
+                    " | p-value = ",
+                    p_val_text,
+                    "\nResidualized on: ",
                     if (length(controls_kept) > 0) {
                       paste(controls_kept, collapse = ", ")
                     } else {
@@ -3193,6 +3300,11 @@ server <- function(input, output, session) {
                   labels = label_number(big.mark = ",", decimal.mark = ".")
                 ) +
                 theme_minimal(base_size = 14) +
+                theme(
+                  plot.title = element_text(face = "bold"),
+                  plot.subtitle = element_text(color = "gray40", size = 10),
+                  plot.title.position = "plot"
+                ) +
                 coord_flip()
             }
           }
