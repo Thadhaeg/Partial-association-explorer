@@ -20,8 +20,41 @@ if (file.exists("archive.r")) {
 
 ui <- tagList(
   tags$head(
-    tags$title("AssociationProfiler App"),
-    tags$link(rel = "stylesheet", type = "text/css", href = "custom.css")
+    tags$title("Partial Association Explorer"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "custom.css"),
+    tags$style(HTML("
+      .nav-link:has(.faded-pair-tab),
+      .bslib-nav-link:has(.faded-pair-tab),
+      button:has(.faded-pair-tab) {
+        opacity: 0.6 !important;
+      }
+      .faded-pair-tab {
+        color: #6c757d;
+      }
+      .nav-link:has(.conditional-only-pair-tab),
+      .bslib-nav-link:has(.conditional-only-pair-tab),
+      button:has(.conditional-only-pair-tab) {
+        opacity: 1 !important;
+      }
+      .conditional-only-pair-tab {
+        color: #74c69d;
+        font-weight: 600;
+      }
+      .pair-note-muted {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-left: 4px solid #adb5bd;
+        background: #f8f9fa;
+        color: #5c6770;
+      }
+      .pair-note-positive {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-left: 4px solid #74c69d;
+        background: #f1fbf5;
+        color: #3f6f55;
+      }
+    "))
   ),
   fluidPage(
     shinyjs::useShinyjs(),
@@ -35,7 +68,7 @@ ui <- tagList(
       code_font = font_google("Fira Code")
     ),
     tags$div(class = "centered-padding-top"),
-    titlePanel(div("AssociationProfiler", class = "app-title")),
+    titlePanel(div("Partial Association Explorer", class = "app-title")),
     br(),
     tabsetPanel(
       id = "main_tabs",
@@ -82,6 +115,14 @@ ui <- tagList(
         br(),
         br(),
         uiOutput("variable_checkboxes_ui"),
+        div(
+          style = "margin-top: 10px;",
+          actionButton(
+            "clear_selected_vars",
+            "Empty variable list",
+            class = "btn btn-outline-secondary"
+          )
+        ),
         br(),
 
         # Control variables section
@@ -137,6 +178,15 @@ ui <- tagList(
             )),
             br(),
             br(),
+            uiOutput("network_mode_toggle_ui"),
+            br(),
+            downloadButton(
+              "download_associations_csv",
+              "Export associations (CSV)",
+              class = "btn btn-outline-primary"
+            ),
+            br(),
+            br(),
             fluidRow(
               column(
                 12,
@@ -165,6 +215,8 @@ ui <- tagList(
         value = "pairs_tab",
         fluidPage(
           class = "panel-white",
+          uiOutput("pairs_mode_toggle_ui"),
+          uiOutput("pairs_context_ui"),
           withSpinner(uiOutput("pairs_plot"), type = 6, color = "#0072B2")
         )
       ),
@@ -175,7 +227,7 @@ ui <- tagList(
           class = "help-container",
           br(),
           br(),
-          h3("How to use the AssociationProfiler app?"),
+          h3("How to use the Partial Association Explorer app?"),
           br(),
           tags$ul(
             tags$li(
@@ -221,10 +273,11 @@ ui <- tagList(
 # =============================================================================
 
 # Helper to build nice reactable tables
-make_table <- function(df, columns_defs) {
+make_table <- function(df, columns_defs, column_groups = NULL) {
   reactable(
     df,
     columns = columns_defs,
+    columnGroups = column_groups,
     bordered = TRUE,
     striped = TRUE,
     highlight = TRUE,
@@ -276,6 +329,80 @@ format_plot_p_value <- function(p_value) {
   }
 
   formatC(signif(as.numeric(p_value[[1]]), 3), digits = 3, format = "fg", flag = "#")
+}
+
+display_association_value <- function(value, cor_type) {
+  if (
+    is.null(value) ||
+      length(value) == 0 ||
+      is.na(value[[1]]) ||
+      is.null(cor_type) ||
+      length(cor_type) == 0 ||
+      is.na(cor_type[[1]]) ||
+      !nzchar(trimws(as.character(cor_type[[1]])))
+  ) {
+    return(NA_real_)
+  }
+
+  if (cor_type %in% c("Pearson's r", "Partial r", "Eta²", "Partial Eta²")) {
+    return(as.numeric(value[[1]])^2)
+  }
+
+  as.numeric(value[[1]])
+}
+
+display_measure_label <- function(cor_type) {
+  if (
+    is.null(cor_type) ||
+      length(cor_type) == 0 ||
+      is.na(cor_type[[1]]) ||
+      !nzchar(trimws(as.character(cor_type[[1]])))
+  ) {
+    return(NA_character_)
+  }
+
+  dplyr::case_when(
+    cor_type[[1]] == "Pearson's r" ~ "R²",
+    cor_type[[1]] == "Partial r" ~ "Partial R²",
+    cor_type[[1]] == "Eta²" ~ "Eta²",
+    cor_type[[1]] == "Partial Eta²" ~ "Partial Eta²",
+    TRUE ~ as.character(cor_type[[1]])
+  )
+}
+
+collapse_named_descriptions <- function(var_names, descriptions_df = NULL) {
+  if (is.null(var_names) || length(var_names) == 0) {
+    return(NA_character_)
+  }
+
+  paste(
+    vapply(
+      var_names,
+      function(x) {
+        paste0(x, " = ", resolve_variable_description(x, descriptions_df))
+      },
+      character(1)
+    ),
+    collapse = "; "
+  )
+}
+
+format_controls_context_text <- function(
+  selected_controls,
+  descriptions_df = NULL,
+  apply_controls = FALSE
+) {
+  if (is.null(selected_controls) || length(selected_controls) == 0) {
+    return("No controls selected.")
+  }
+
+  controls_text <- collapse_named_descriptions(selected_controls, descriptions_df)
+
+  if (isTRUE(apply_controls)) {
+    paste0("Controls applied: ", controls_text)
+  } else {
+    paste0("Selected controls (not applied in this view): ", controls_text)
+  }
 }
 
 # NEW : Helper: compute residuals of y after regressing on controls
@@ -774,7 +901,11 @@ parse_W_levels <- function(W_levels, sep, x_levels, y_levels) {
 }
 
 if (!exists("find_optimal_submatrix_heuristic", mode = "function")) {
-  find_optimal_submatrix_heuristic <- function(contribution_matrix, n = 5) {
+  find_optimal_submatrix_heuristic <- function(
+      contribution_matrix,
+      n = 5,
+      reason = NULL
+  ) {
     N <- nrow(contribution_matrix)
     M <- ncol(contribution_matrix)
     target_rows <- min(N, n)
@@ -794,7 +925,9 @@ if (!exists("find_optimal_submatrix_heuristic", mode = "function")) {
       return(list(
         rows = seq_len(target_rows),
         cols = seq_len(target_cols),
-        objective = 0
+        objective = 0,
+        method = "heuristic",
+        fallback_reason = reason
       ))
     }
 
@@ -812,7 +945,9 @@ if (!exists("find_optimal_submatrix_heuristic", mode = "function")) {
     list(
       rows = top_rows,
       cols = top_cols,
-      objective = sum(contribution_matrix[top_rows, top_cols, drop = FALSE])
+      objective = sum(contribution_matrix[top_rows, top_cols, drop = FALSE]),
+      method = "heuristic",
+      fallback_reason = reason
     )
   }
 }
@@ -828,12 +963,18 @@ if (!exists("find_optimal_submatrix", mode = "function")) {
       return(list(
         rows = seq_len(N),
         cols = seq_len(M),
-        objective = sum(contribution_matrix)
+        objective = sum(contribution_matrix),
+        method = "full",
+        fallback_reason = NULL
       ))
     }
 
     if (!require(lpSolve, quietly = TRUE)) {
-      return(find_optimal_submatrix_heuristic(contribution_matrix, n))
+      return(find_optimal_submatrix_heuristic(
+        contribution_matrix,
+        n,
+        reason = "the lpSolve package is not available, so the exact binary optimization could not be run"
+      ))
     }
 
     total_vars <- N + M + N * M
@@ -894,7 +1035,14 @@ if (!exists("find_optimal_submatrix", mode = "function")) {
     )
 
     if (solution$status != 0) {
-      return(find_optimal_submatrix_heuristic(contribution_matrix, n))
+      return(find_optimal_submatrix_heuristic(
+        contribution_matrix,
+        n,
+        reason = paste0(
+          "the exact binary optimization returned solver status ",
+          solution$status
+        )
+      ))
     }
 
     u_values <- solution$solution[seq_len(N)]
@@ -903,7 +1051,9 @@ if (!exists("find_optimal_submatrix", mode = "function")) {
     list(
       rows = which(round(u_values) == 1),
       cols = which(round(v_values) == 1),
-      objective = solution$objval
+      objective = solution$objval,
+      method = "optimal",
+      fallback_reason = NULL
     )
   }
 }
@@ -1435,6 +1585,116 @@ apply_p_value_threshold <- function(mat, p_mat, threshold_p) {
   mat
 }
 
+filter_association_result <- function(
+  cor_result,
+  threshold_num,
+  threshold_cat,
+  threshold_p,
+  prune = FALSE
+) {
+  req_fields <- c("cor_matrix", "cor_type_matrix", "p_matrix")
+  if (is.null(cor_result) || !all(req_fields %in% names(cor_result))) {
+    return(NULL)
+  }
+
+  mat <- apply_association_thresholds(
+    cor_result$cor_matrix,
+    cor_result$cor_type_matrix,
+    threshold_num,
+    threshold_cat
+  )
+  mat <- apply_p_value_threshold(mat, cor_result$p_matrix, threshold_p)
+  mat[is.na(mat)] <- 0
+
+  if (isTRUE(prune)) {
+    mat <- prune_isolated_nodes(mat)
+  }
+
+  mat
+}
+
+matrix_has_edges <- function(mat) {
+  !is.null(mat) &&
+    nrow(mat) > 1 &&
+    ncol(mat) > 1 &&
+    sum(mat[upper.tri(mat)] != 0, na.rm = TRUE) > 0
+}
+
+build_association_export_df <- function(
+  cor_result,
+  data,
+  descriptions_df = NULL,
+  control_vars_selected = NULL,
+  controls_applied = FALSE,
+  view_mode = NULL,
+  threshold_num = NULL,
+  threshold_cat = NULL,
+  threshold_p = NULL
+) {
+  if (is.null(cor_result) || is.null(data) || ncol(data) < 2) {
+    return(data.frame())
+  }
+
+  vars <- names(data)
+  pair_index <- combn(vars, 2, simplify = FALSE)
+  filtered_mat <- filter_association_result(
+    cor_result,
+    threshold_num,
+    threshold_cat,
+    threshold_p,
+    prune = FALSE
+  )
+
+  controls_selected_text <- collapse_named_descriptions(
+    control_vars_selected,
+    descriptions_df
+  )
+
+  rows <- lapply(pair_index, function(pair) {
+    v1 <- pair[1]
+    v2 <- pair[2]
+
+    measure_type <- cor_result$cor_type_matrix[v1, v2]
+    measure_label <- display_measure_label(measure_type)
+    measure_value <- display_association_value(
+      cor_result$cor_matrix[v1, v2],
+      measure_type
+    )
+    retained <- FALSE
+    if (!is.null(filtered_mat) && v1 %in% rownames(filtered_mat) && v2 %in% colnames(filtered_mat)) {
+      retained <- filtered_mat[v1, v2] != 0
+    }
+
+    data.frame(
+      variable_1 = v1,
+      variable_1_description = resolve_variable_description(v1, descriptions_df),
+      variable_2 = v2,
+      variable_2_description = resolve_variable_description(v2, descriptions_df),
+      association_measure = measure_label,
+      association_strength = measure_value,
+      p_value = cor_result$p_matrix[v1, v2],
+      association_context = if (!is.null(view_mode) && length(view_mode) > 0) {
+        as.character(view_mode[[1]])
+      } else if (isTRUE(controls_applied)) {
+        "conditional"
+      } else {
+        "unconditional"
+      },
+      controls_applied = controls_applied,
+      selected_controls = if (length(control_vars_selected) > 0) {
+        paste(control_vars_selected, collapse = "; ")
+      } else {
+        NA_character_
+      },
+      selected_controls_descriptions = controls_selected_text,
+      retained_under_current_filters = retained,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  dplyr::bind_rows(rows)
+}
+
 prune_isolated_nodes <- function(mat) {
   if (is.null(mat) || nrow(mat) == 0 || ncol(mat) == 0) {
     return(mat)
@@ -1459,6 +1719,67 @@ prune_isolated_nodes <- function(mat) {
   pruned
 }
 
+safe_named_square_subset <- function(mat, target_names, fill = 0) {
+  target_names <- unique(as.character(target_names))
+
+  out <- matrix(
+    fill,
+    nrow = length(target_names),
+    ncol = length(target_names),
+    dimnames = list(target_names, target_names)
+  )
+
+  if (
+    is.null(mat) ||
+      length(target_names) == 0 ||
+      is.null(rownames(mat)) ||
+      is.null(colnames(mat))
+  ) {
+    return(out)
+  }
+
+  common_names <- intersect(target_names, intersect(rownames(mat), colnames(mat)))
+  if (length(common_names) > 0) {
+    out[common_names, common_names] <- mat[common_names, common_names, drop = FALSE]
+  }
+
+  out
+}
+
+align_named_square_matrices <- function(primary_mat, secondary_mat, fill = 0) {
+  primary_names <- if (!is.null(primary_mat) && !is.null(rownames(primary_mat))) {
+    rownames(primary_mat)
+  } else {
+    character(0)
+  }
+  secondary_names <- if (!is.null(secondary_mat) && !is.null(rownames(secondary_mat))) {
+    rownames(secondary_mat)
+  } else {
+    character(0)
+  }
+
+  all_names <- union(primary_names, secondary_names)
+
+  list(
+    primary = safe_named_square_subset(primary_mat, all_names, fill = fill),
+    secondary = safe_named_square_subset(secondary_mat, all_names, fill = fill)
+  )
+}
+
+safe_named_matrix_value <- function(mat, row_name, col_name, default = NA_real_) {
+  if (
+    is.null(mat) ||
+      is.null(rownames(mat)) ||
+      is.null(colnames(mat)) ||
+      !(row_name %in% rownames(mat)) ||
+      !(col_name %in% colnames(mat))
+  ) {
+    return(default)
+  }
+
+  mat[row_name, col_name]
+}
+
 compute_catcat_display_scores <- function(O, E0) {
   scores <- matrix(0, nrow = nrow(O), ncol = ncol(O), dimnames = dimnames(O))
   mask <- is.finite(E0) & (E0 > 0)
@@ -1476,25 +1797,43 @@ select_catcat_display_submatrix <- function(contribution_matrix, max_dim = 7L) {
       rows = seq_len(n_rows),
       cols = seq_len(n_cols),
       reduced = FALSE,
-      method = "full"
+      method = "full",
+      fallback_reason = NULL
     ))
   }
 
   if (exists("find_optimal_submatrix", mode = "function")) {
     selection <- tryCatch(
       find_optimal_submatrix(contribution_matrix, n = max_dim),
-      error = function(e) NULL
+      error = function(e) {
+        find_optimal_submatrix_heuristic(
+          contribution_matrix,
+          n = max_dim,
+          reason = paste0(
+            "the exact binary optimization raised an error: ",
+            conditionMessage(e)
+          )
+        )
+      }
     )
     if (!is.null(selection)) {
       selection$reduced <- TRUE
-      selection$method <- "optimal"
+      if (is.null(selection$method)) {
+        selection$method <- "optimal"
+      }
+      if (is.null(selection$fallback_reason)) {
+        selection$fallback_reason <- NULL
+      }
       return(selection)
     }
   }
 
-  selection <- find_optimal_submatrix_heuristic(contribution_matrix, n = max_dim)
+  selection <- find_optimal_submatrix_heuristic(
+    contribution_matrix,
+    n = max_dim,
+    reason = "the exact optimization routine was not available in the current session"
+  )
   selection$reduced <- TRUE
-  selection$method <- "heuristic"
   selection
 }
 
@@ -1991,6 +2330,24 @@ server <- function(input, output, session) {
   data_env <- new.env()
   data_env$full_data <- reactiveVal(NULL)
   pair_cache <- new.env(parent = emptyenv())
+  association_view_mode <- reactiveVal("unconditional")
+  active_pair_plot_tab <- reactiveVal(NULL)
+  show_unconditional_pair_plots <- reactiveVal(FALSE)
+
+  flip_association_view <- function() {
+    if (!has_controls()) {
+      association_view_mode("unconditional")
+      return(invisible(NULL))
+    }
+
+    association_view_mode(
+      if (identical(association_view_mode(), "conditional")) {
+        "unconditional"
+      } else {
+        "conditional"
+      }
+    )
+  }
 
   # NEW: Control variables UI
   output$control_vars_ui <- renderUI({
@@ -2025,6 +2382,149 @@ server <- function(input, output, session) {
   has_controls <- reactive({
     !is.null(input$control_vars) && length(input$control_vars) > 0
   })
+
+  observeEvent(input$control_vars, {
+    association_view_mode(if (has_controls()) "conditional" else "unconditional")
+    if (!has_controls()) {
+      show_unconditional_pair_plots(FALSE)
+    }
+  }, ignoreInit = FALSE)
+
+  observeEvent(input$process_data, {
+    association_view_mode("unconditional")
+    active_pair_plot_tab(NULL)
+    show_unconditional_pair_plots(FALSE)
+  }, ignoreInit = TRUE)
+
+  current_view_uses_controls <- reactive({
+    has_controls() && identical(association_view_mode(), "conditional")
+  })
+
+  current_view_controls <- reactive({
+    if (current_view_uses_controls()) {
+      input$control_vars
+    } else {
+      NULL
+    }
+  })
+
+  current_view_label <- reactive({
+    if (current_view_uses_controls()) {
+      "conditional"
+    } else {
+      "unconditional"
+    }
+  })
+
+  alternative_view_label <- reactive({
+    if (!has_controls()) {
+      NA_character_
+    } else if (current_view_uses_controls()) {
+      "unconditional"
+    } else {
+      "conditional"
+    }
+  })
+
+  output$network_mode_toggle_ui <- renderUI({
+    if (!has_controls()) {
+      return(NULL)
+    }
+
+    button_label <- if (current_view_uses_controls()) {
+      "Switch to unconditional comparison"
+    } else {
+      "Switch to conditional comparison"
+    }
+
+    tagList(
+      actionButton(
+        "toggle_network_view",
+        button_label,
+        class = "btn btn-secondary"
+      ),
+      tags$p(
+        style = "margin-top:8px; font-size:0.85em; color:#666666;",
+        paste0(
+          "Current view: ",
+          current_view_label(),
+          ". Green edges are unique to the current view; gray dashed edges are only in the alternative view."
+        )
+      )
+    )
+  })
+
+  output$pairs_mode_toggle_ui <- renderUI({
+    if (!has_controls()) {
+      return(NULL)
+    }
+
+    button_label <- if (isTRUE(show_unconditional_pair_plots())) {
+      "Hide unconditional comparison"
+    } else {
+      "Show unconditional comparison below"
+    }
+
+    tagList(
+      div(
+        style = "margin: 12px 0;",
+        actionButton(
+          "toggle_pair_comparison",
+          button_label,
+          class = "btn btn-secondary"
+        )
+      )
+    )
+  })
+
+  output$pairs_context_ui <- renderUI({
+    div(
+      style = "margin: 4px 0 14px 0; padding: 10px 12px; background: #f8f9fa; border-left: 4px solid #0072B2;",
+      tags$div(
+        style = "font-weight: 700; margin-bottom: 4px;",
+        paste0(
+          "Displayed pair-plot view: ",
+          if (has_controls()) "Conditional" else "Unconditional"
+        )
+      ),
+      tags$div(
+        style = "font-size: 0.92em; color: #555;",
+        format_controls_context_text(
+          selected_controls = input$control_vars,
+          descriptions_df = var_descriptions(),
+          apply_controls = has_controls()
+        )
+      ),
+      if (has_controls()) {
+        tagList(
+          tags$div(
+            style = "font-size: 0.9em; color: #666; margin-top: 4px;",
+            if (isTRUE(show_unconditional_pair_plots())) {
+              "Unconditional comparison is displayed below each conditional pair plot."
+            } else {
+              "Use the button above to show or hide the unconditional comparison below each conditional pair plot."
+            }
+          ),
+          tags$div(
+            style = "font-size: 0.9em; color: #666; margin-top: 4px;",
+            "Faded pair tabs correspond to associations retained without controls but no longer retained after conditioning."
+          )
+        )
+      }
+    )
+  })
+
+  observeEvent(input$toggle_network_view, {
+    flip_association_view()
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$toggle_pair_comparison, {
+    show_unconditional_pair_plots(!isTRUE(show_unconditional_pair_plots()))
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$bivariate_tabs, {
+    active_pair_plot_tab(input$bivariate_tabs)
+  }, ignoreInit = FALSE)
 
   observeEvent(input$process_data, {
     req(input$data_file)
@@ -2165,6 +2665,14 @@ server <- function(input, output, session) {
     input$selected_vars
   })
 
+  observeEvent(input$clear_selected_vars, {
+    updateSelectizeInput(
+      session,
+      inputId = "selected_vars",
+      selected = character(0)
+    )
+  }, ignoreInit = TRUE)
+
   output$go_to_network_ui <- renderUI({
     req(input$selected_vars)
     actionButton(
@@ -2204,179 +2712,462 @@ server <- function(input, output, session) {
     updateTabsetPanel(session, inputId = "main_tabs", selected = "pairs_tab")
   })
 
-  cor_matrix_reactive <- reactive({
+  selected_data_reactive <- reactive({
     req(data())
     selected_vars <- visualization_vars()
-    selected_data <- data()[, selected_vars, drop = FALSE]
+    data()[, selected_vars, drop = FALSE]
+  })
 
+  cor_matrix_unconditional_reactive <- reactive({
     calculate_correlations(
-      data = selected_data,
-      control_vars = input$control_vars,
-      full_data = if (has_controls()) data_env$full_data() else NULL,
+      data = selected_data_reactive(),
+      control_vars = NULL,
+      full_data = NULL,
       pair_cache = pair_cache
     )
+  })
+
+  cor_matrix_conditional_reactive <- reactive({
+    if (!has_controls()) {
+      return(cor_matrix_unconditional_reactive())
+    }
+
+    calculate_correlations(
+      data = selected_data_reactive(),
+      control_vars = input$control_vars,
+      full_data = data_env$full_data(),
+      pair_cache = pair_cache
+    )
+  })
+
+  cor_matrix_reactive <- reactive({
+    if (current_view_uses_controls()) {
+      cor_matrix_conditional_reactive()
+    } else {
+      cor_matrix_unconditional_reactive()
+    }
+  })
+
+  comparison_cor_matrix_reactive <- reactive({
+    if (!has_controls()) {
+      return(NULL)
+    }
+
+    if (current_view_uses_controls()) {
+      cor_matrix_unconditional_reactive()
+    } else {
+      cor_matrix_conditional_reactive()
+    }
   })
 
   cor_matrix_vals <- reactive({
     cor_matrix_reactive()
   })
 
-  filtered_data_for_pairs <- reactive({
-    cor_res <- cor_matrix_vals()
-    mat <- apply_association_thresholds(
-      cor_res$cor_matrix,
-      cor_res$cor_type_matrix,
+  current_filtered_matrix_raw <- reactive({
+    filter_association_result(
+      cor_matrix_reactive(),
       input$threshold_num,
-      input$threshold_cat
+      input$threshold_cat,
+      input$threshold_p,
+      prune = FALSE
     )
-    p_mat <- cor_res$p_matrix
+  })
 
-    mat <- apply_p_value_threshold(mat, p_mat, input$threshold_p)
-    filtered_matrix <- prune_isolated_nodes(mat)
+  current_filtered_matrix <- reactive({
+    mat <- current_filtered_matrix_raw()
+    if (is.null(mat)) {
+      return(NULL)
+    }
+    prune_isolated_nodes(mat)
+  })
 
-    if (ncol(filtered_matrix) == 0) {
+  comparison_filtered_matrix_raw <- reactive({
+    if (!has_controls()) {
       return(NULL)
     }
 
-    data()[, colnames(filtered_matrix), drop = FALSE]
+    filter_association_result(
+      comparison_cor_matrix_reactive(),
+      input$threshold_num,
+      input$threshold_cat,
+      input$threshold_p,
+      prune = FALSE
+    )
+  })
+
+  pair_plots_primary_cor_result <- reactive({
+    if (has_controls()) {
+      cor_matrix_conditional_reactive()
+    } else {
+      cor_matrix_unconditional_reactive()
+    }
+  })
+
+  pair_plots_primary_filtered_matrix_raw <- reactive({
+    filter_association_result(
+      pair_plots_primary_cor_result(),
+      input$threshold_num,
+      input$threshold_cat,
+      input$threshold_p,
+      prune = FALSE
+    )
+  })
+
+  pair_plots_primary_filtered_matrix <- reactive({
+    mat <- pair_plots_primary_filtered_matrix_raw()
+    if (is.null(mat)) {
+      return(NULL)
+    }
+    prune_isolated_nodes(mat)
+  })
+
+  pair_plots_unconditional_filtered_matrix_raw <- reactive({
+    if (!has_controls()) {
+      return(NULL)
+    }
+
+    filter_association_result(
+      cor_matrix_unconditional_reactive(),
+      input$threshold_num,
+      input$threshold_cat,
+      input$threshold_p,
+      prune = FALSE
+    )
   })
 
   significant_pairs <- reactive({
-    req(cor_matrix_vals())
     req(input$threshold_num)
     req(input$threshold_cat)
 
-    cor_res <- cor_matrix_vals()
-    mat <- apply_association_thresholds(
-      cor_res$cor_matrix,
-      cor_res$cor_type_matrix,
-      input$threshold_num,
-      input$threshold_cat
-    )
-    p_mat <- cor_res$p_matrix
+    if (!has_controls()) {
+      filtered_matrix <- pair_plots_primary_filtered_matrix()
 
-    mat <- apply_p_value_threshold(mat, p_mat, input$threshold_p)
-    filtered_matrix <- prune_isolated_nodes(mat)
+      if (is.null(filtered_matrix) || ncol(filtered_matrix) == 0) {
+        return(NULL)
+      }
 
-    if (ncol(filtered_matrix) == 0) {
+      pairs <- which(
+        filtered_matrix != 0 & upper.tri(filtered_matrix),
+        arr.ind = TRUE
+      )
+
+      if (nrow(pairs) == 0) {
+        return(NULL)
+      }
+
+      return(data.frame(
+        var1 = rownames(filtered_matrix)[pairs[, 1]],
+        var2 = colnames(filtered_matrix)[pairs[, 2]],
+        retained_conditional = FALSE,
+        retained_unconditional = TRUE,
+        faded = FALSE,
+        conditional_only = FALSE,
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    cond_mat <- pair_plots_primary_filtered_matrix_raw()
+    uncond_mat <- pair_plots_unconditional_filtered_matrix_raw()
+
+    if (is.null(cond_mat) && is.null(uncond_mat)) {
       return(NULL)
     }
 
-    pairs <- which(
-      filtered_matrix != 0 & upper.tri(filtered_matrix),
+    if (is.null(cond_mat)) {
+      cond_mat <- uncond_mat * 0
+    }
+    if (is.null(uncond_mat)) {
+      uncond_mat <- cond_mat * 0
+    }
+
+    aligned_pair_mats <- align_named_square_matrices(
+      cond_mat,
+      uncond_mat,
+      fill = 0
+    )
+    cond_mat <- aligned_pair_mats$primary
+    uncond_mat <- aligned_pair_mats$secondary
+
+    if (nrow(cond_mat) == 0 || ncol(cond_mat) == 0) {
+      return(NULL)
+    }
+
+    union_pairs <- which(
+      ((cond_mat != 0) | (uncond_mat != 0)) & upper.tri(cond_mat),
       arr.ind = TRUE
     )
 
-    if (nrow(pairs) == 0) {
+    if (nrow(union_pairs) == 0) {
       return(NULL)
     }
 
-    data.frame(
-      var1 = rownames(filtered_matrix)[pairs[, 1]],
-      var2 = colnames(filtered_matrix)[pairs[, 2]],
+    out <- data.frame(
+      var1 = rownames(cond_mat)[union_pairs[, 1]],
+      var2 = colnames(cond_mat)[union_pairs[, 2]],
+      retained_conditional = cond_mat[union_pairs] != 0,
+      retained_unconditional = uncond_mat[union_pairs] != 0,
       stringsAsFactors = FALSE
     )
+
+    out$faded <- !out$retained_conditional & out$retained_unconditional
+    out$conditional_only <- out$retained_conditional & !out$retained_unconditional
+    out[order(out$faded, out$var1, out$var2), , drop = FALSE]
+  })
+
+  filtered_data_for_pairs <- reactive({
+    pairs <- significant_pairs()
+
+    if (is.null(pairs) || nrow(pairs) == 0) {
+      return(NULL)
+    }
+
+    vars_to_keep <- unique(c(pairs$var1, pairs$var2))
+    data()[, vars_to_keep, drop = FALSE]
   })
 
   output$network_info <- renderUI({
     cor_result <- cor_matrix_reactive()
     req(cor_result)
 
-    cor_matrix <- cor_result$cor_matrix
-    cor_type_matrix <- cor_result$cor_type_matrix
-    p_matrix <- cor_result$p_matrix
+    active_mat <- current_filtered_matrix_raw()
+    compare_mat <- comparison_filtered_matrix_raw()
 
-    cor_filtered <- apply_association_thresholds(
-      cor_matrix,
-      cor_type_matrix,
-      input$threshold_num,
-      input$threshold_cat
+    if (is.null(active_mat)) {
+      return(NULL)
+    }
+
+    active_mat[is.na(active_mat)] <- 0
+    if (is.null(compare_mat)) {
+      compare_mat <- active_mat * 0
+    } else {
+      compare_mat[is.na(compare_mat)] <- 0
+    }
+
+    aligned_info_mats <- align_named_square_matrices(
+      active_mat,
+      compare_mat,
+      fill = 0
     )
-    cor_filtered <- apply_p_value_threshold(cor_filtered, p_matrix, input$threshold_p)
-    cor_filtered[is.na(cor_filtered)] <- 0
+    active_mat <- aligned_info_mats$primary
+    compare_mat <- aligned_info_mats$secondary
 
-    mat <- prune_isolated_nodes(cor_filtered)
-    type_mat <- cor_type_matrix[colnames(mat), colnames(mat), drop = FALSE]
+    union_presence <- (active_mat != 0) | (compare_mat != 0)
+    diag(union_presence) <- FALSE
+    keep <- rowSums(union_presence) > 0
+    n_nodes <- sum(keep)
 
-    n_nodes <- ncol(mat)
-    edgelist <- which(mat != 0 & upper.tri(mat), arr.ind = TRUE)
-    n_edges <- nrow(edgelist)
+    active_pruned <- current_filtered_matrix()
+    n_active_edges <- if (matrix_has_edges(active_pruned)) {
+      sum(active_pruned[upper.tri(active_pruned)] != 0, na.rm = TRUE)
+    } else {
+      0
+    }
 
-    # Count edge types among displayed edges
-    edge_types <- if (n_edges > 0) type_mat[edgelist] else character(0)
+    active_type_mat <- cor_result$cor_type_matrix
+    active_edgelist <- if (matrix_has_edges(active_pruned)) {
+      which(active_pruned != 0 & upper.tri(active_pruned), arr.ind = TRUE)
+    } else {
+      matrix(integer(0), ncol = 2)
+    }
+    edge_types <- if (nrow(active_edgelist) > 0) {
+      active_type_mat[active_edgelist]
+    } else {
+      character(0)
+    }
 
     n_catcat <- sum(edge_types %in% c("VL", "VL|Z"), na.rm = TRUE)
     n_numnum <- sum(edge_types %in% c("Pearson's r", "Partial r"), na.rm = TRUE)
-    n_mixed <- n_edges - n_catcat - n_numnum
+    n_mixed <- n_active_edges - n_catcat - n_numnum
 
-    div(
-      style = "margin-bottom: 8px; font-size: 13px;",
-      strong("Network summary: "),
-      paste0(n_nodes, " variables, ", n_edges, " associations"),
-      br(),
-      span(
-        style = "opacity: 0.85;",
+    view_context_block <- div(
+      style = "margin-bottom: 10px; padding: 10px 12px; background: #f8f9fa; border-left: 4px solid #0072B2;",
+      tags$div(
+        style = "font-weight: 700; margin-bottom: 4px;",
         paste0(
-          "Breakdown: ",
-          n_catcat,
-          " cat–cat (VL/VL|Z), ",
-          n_numnum,
-          " num–num (R²), ",
-          n_mixed,
-          " mixed (η²)"
+          "Displayed network view: ",
+          if (current_view_uses_controls()) "Conditional" else "Unconditional"
+        )
+      ),
+      tags$div(
+        style = "font-size: 0.92em; color: #555;",
+        format_controls_context_text(
+          selected_controls = input$control_vars,
+          descriptions_df = var_descriptions(),
+          apply_controls = current_view_uses_controls()
+        )
+      )
+    )
+
+    if (!has_controls()) {
+      return(tagList(
+        view_context_block,
+        div(
+          style = "margin-bottom: 8px; font-size: 13px;",
+          strong("Network summary: "),
+          paste0(n_nodes, " variables, ", n_active_edges, " associations"),
+          br(),
+          span(
+            style = "opacity: 0.85;",
+            paste0(
+              "Breakdown: ",
+              n_catcat,
+              " cat–cat (VL/VL|Z), ",
+              n_numnum,
+              " num–num (R²), ",
+              n_mixed,
+              " mixed (η²)"
+            )
+          )
+        )
+      ))
+    }
+
+    compare_result <- comparison_cor_matrix_reactive()
+    keep_names <- names(keep)[keep]
+    active_keep <- active_mat[keep_names, keep_names, drop = FALSE]
+    compare_keep <- compare_mat[keep_names, keep_names, drop = FALSE]
+    union_edgelist <- which(
+      ((active_keep != 0) | (compare_keep != 0)) & upper.tri(active_keep),
+      arr.ind = TRUE
+    )
+
+    active_present <- active_keep[union_edgelist] != 0
+    compare_present <- compare_keep[union_edgelist] != 0
+    n_shared <- sum(active_present & compare_present, na.rm = TRUE)
+    n_current_only <- sum(active_present & !compare_present, na.rm = TRUE)
+    n_alternative_only <- sum(!active_present & compare_present, na.rm = TRUE)
+
+    tagList(
+      view_context_block,
+      div(
+        style = "margin-bottom: 8px; font-size: 13px;",
+        strong("Network summary: "),
+        paste0(n_nodes, " variables displayed"),
+        br(),
+        span(
+          style = "opacity: 0.9;",
+          paste0(
+            "Current ",
+            current_view_label(),
+            " view: ",
+            n_active_edges,
+            " retained associations."
+          )
+        ),
+        br(),
+        span(
+          style = "opacity: 0.85;",
+          paste0(
+            "Shared with the ",
+            alternative_view_label(),
+            " view: ",
+            n_shared,
+            " | Only current: ",
+            n_current_only,
+            " | Only ",
+            alternative_view_label(),
+            ": ",
+            n_alternative_only
+          )
+        ),
+        br(),
+        span(
+          style = "opacity: 0.85;",
+          paste0(
+            "Breakdown in current view: ",
+            n_catcat,
+            " cat–cat (VL/VL|Z), ",
+            n_numnum,
+            " num–num (R²), ",
+            n_mixed,
+            " mixed (η²)"
+          )
         )
       )
     )
   })
 
   output$network_vis <- renderVisNetwork({
-    cor_result <- cor_matrix_reactive()
-    cor_matrix <- cor_result$cor_matrix
-    cor_type_matrix <- cor_result$cor_type_matrix
-    p_matrix <- cor_result$p_matrix
+    active_result <- cor_matrix_reactive()
+    active_filtered <- current_filtered_matrix_raw()
 
-    cor_filtered <- apply_association_thresholds(
-      cor_matrix,
-      cor_type_matrix,
-      input$threshold_num,
-      input$threshold_cat
+    req(active_result)
+    req(active_filtered)
+
+    active_filtered[is.na(active_filtered)] <- 0
+
+    compare_result <- comparison_cor_matrix_reactive()
+    compare_filtered <- comparison_filtered_matrix_raw()
+    if (is.null(compare_filtered)) {
+      compare_filtered <- active_filtered * 0
+    } else {
+      compare_filtered[is.na(compare_filtered)] <- 0
+    }
+
+    aligned_network_mats <- align_named_square_matrices(
+      active_filtered,
+      compare_filtered,
+      fill = 0
     )
-    cor_filtered <- apply_p_value_threshold(cor_filtered, p_matrix, input$threshold_p)
+    active_filtered <- aligned_network_mats$primary
+    compare_filtered <- aligned_network_mats$secondary
 
-    cor_matrix_clean <- cor_filtered
-    cor_matrix_clean[is.na(cor_matrix_clean)] <- 0
-
-    mat <- prune_isolated_nodes(cor_matrix_clean)
-    type_mat <- cor_type_matrix[colnames(mat), colnames(mat), drop = FALSE]
+    union_presence <- (active_filtered != 0) | (compare_filtered != 0)
+    diag(union_presence) <- FALSE
+    keep <- rowSums(union_presence) > 0
 
     validate(
       need(
-        ncol(mat) > 0 && sum(mat[upper.tri(mat)] != 0, na.rm = TRUE) > 0,
+        any(keep),
         "No associations above the thresholds and significance level. Please adjust the thresholds or select different variables."
       )
     )
 
-    # 1) Prepare nodes with descriptions instead of names
-    nodes <- data.frame(id = colnames(mat), stringsAsFactors = FALSE) |>
+    keep_names <- names(keep)[keep]
+    active_mat <- safe_named_square_subset(active_filtered, keep_names, fill = 0)
+    compare_mat <- safe_named_square_subset(compare_filtered, keep_names, fill = 0)
+    active_type_mat <- safe_named_square_subset(active_result$cor_type_matrix, keep_names, fill = "")
+    active_p_mat <- safe_named_square_subset(active_result$p_matrix, keep_names, fill = NA_real_)
+
+    compare_type_mat <- if (is.null(compare_result)) {
+      matrix("", nrow = nrow(active_mat), ncol = ncol(active_mat), dimnames = dimnames(active_mat))
+    } else {
+      safe_named_square_subset(compare_result$cor_type_matrix, keep_names, fill = "")
+    }
+    compare_p_mat <- if (is.null(compare_result)) {
+      matrix(NA_real_, nrow = nrow(active_mat), ncol = ncol(active_mat), dimnames = dimnames(active_mat))
+    } else {
+      safe_named_square_subset(compare_result$p_matrix, keep_names, fill = NA_real_)
+    }
+
+    nodes <- data.frame(id = colnames(active_mat), stringsAsFactors = FALSE) |>
       left_join(var_descriptions(), by = c("id" = "variable")) |>
       mutate(
-        label = id, # keep the variable code as label
-        title = description, # on hover, the description will be shown
-        size = 15 # default size
+        label = id,
+        title = description,
+        size = 15
       ) |>
       select(id, label, title, size)
 
-    # 2) Prepare edges with appropriate correlation type
-    edgelist <- which(mat != 0 & upper.tri(mat), arr.ind = TRUE)
-    strengths <- abs(mat[edgelist])
+    edgelist <- which(
+      ((active_mat != 0) | (compare_mat != 0)) & upper.tri(active_mat),
+      arr.ind = TRUE
+    )
 
     edges <- data.frame(
-      from = rownames(mat)[edgelist[, 1]],
-      to = colnames(mat)[edgelist[, 2]],
+      from = rownames(active_mat)[edgelist[, 1]],
+      to = colnames(active_mat)[edgelist[, 2]],
       stringsAsFactors = FALSE
     )
 
-    # Widths
+    active_present <- active_mat[edgelist] != 0
+    compare_present <- compare_mat[edgelist] != 0
+
+    active_strengths <- abs(active_mat[edgelist])
+    compare_strengths <- abs(compare_mat[edgelist])
+    strengths <- ifelse(active_present, active_strengths, compare_strengths)
+
     if (length(strengths) <= 1 || max(strengths) == min(strengths)) {
       edges$width <- 3
     } else {
@@ -2384,34 +3175,130 @@ server <- function(input, output, session) {
         4 * (strengths - min(strengths)) / (max(strengths) - min(strengths))
     }
 
-    # Colors: metrics are non-signed in your matrix (V_L, |r|, sqrt(η²)), so avoid fake sign coding
-    edges$color <- "steelblue"
+    if (!has_controls()) {
+      edges$color <- "#4C78A8"
+      edges$dashes <- FALSE
+    } else {
+      edges$color <- ifelse(
+        active_present & compare_present,
+        "#4C78A8",
+        ifelse(active_present, "#2CA25F", "#B0B0B0")
+      )
+      edges$dashes <- !active_present & compare_present
+    }
 
-    # Tooltip
-    edge_types <- type_mat[edgelist]
-    edge_values <- mat[edgelist]
-    edge_labels <- ifelse(
-      edge_types == "Pearson's r",
-      "R²",
+    active_types <- active_type_mat[edgelist]
+    compare_types <- compare_type_mat[edgelist]
+    active_values <- mapply(
+      function(from, to) safe_named_matrix_value(active_result$cor_matrix, from, to, default = NA_real_),
+      edges$from,
+      edges$to,
+      SIMPLIFY = TRUE
+    )
+    active_p_values <- mapply(
+      function(from, to) safe_named_matrix_value(active_result$p_matrix, from, to, default = NA_real_),
+      edges$from,
+      edges$to,
+      SIMPLIFY = TRUE
+    )
+    compare_values <- if (is.null(compare_result)) {
+      rep(NA_real_, nrow(edges))
+    } else {
+      mapply(
+        function(from, to) safe_named_matrix_value(compare_result$cor_matrix, from, to, default = NA_real_),
+        edges$from,
+        edges$to,
+        SIMPLIFY = TRUE
+      )
+    }
+    compare_p_values <- if (is.null(compare_result)) {
+      rep(NA_real_, nrow(edges))
+    } else {
+      mapply(
+        function(from, to) safe_named_matrix_value(compare_result$p_matrix, from, to, default = NA_real_),
+        edges$from,
+        edges$to,
+        SIMPLIFY = TRUE
+      )
+    }
+    active_display <- mapply(
+      display_association_value,
+      active_values,
+      active_types,
+      SIMPLIFY = TRUE
+    )
+    compare_display <- mapply(
+      display_association_value,
+      compare_values,
+      compare_types,
+      SIMPLIFY = TRUE
+    )
+
+    active_measure_labels <- vapply(active_types, display_measure_label, character(1))
+    compare_measure_labels <- vapply(compare_types, display_measure_label, character(1))
+
+    current_state_labels <- ifelse(
+      active_present & compare_present,
+      "Retained in both views",
       ifelse(
-        edge_types == "Partial r",
-        "Partial R²",
-        ifelse(edge_types == "Eta²", "Eta²", ifelse(edge_types == "Partial Eta²", "Partial Eta²", edge_types))
+        active_present,
+        paste0("Only in the ", current_view_label(), " view"),
+        paste0("Only in the ", alternative_view_label(), " view")
       )
     )
-    edge_display_values <- ifelse(
-      edge_types %in% c("Pearson's r", "Partial r", "Eta²", "Partial Eta²"),
-      edge_values^2,
-      edge_values
-    )
-    edges$title <- paste0(edge_labels, " = ", round(edge_display_values, 2))
 
-    # Lengths
+    active_titles <- paste0(
+      current_view_label(),
+      ": ",
+      ifelse(
+        is.na(active_measure_labels),
+        "not available",
+        paste0(
+          active_measure_labels,
+          " = ",
+          formatC(active_display, digits = 3, format = "f"),
+          " | p = ",
+          vapply(active_p_values, format_plot_p_value, character(1))
+        )
+      )
+    )
+    compare_titles <- if (is.null(compare_result)) {
+      rep("", nrow(edges))
+    } else {
+      paste0(
+        alternative_view_label(),
+        ": ",
+        ifelse(
+          is.na(compare_measure_labels),
+          "not available",
+          paste0(
+            compare_measure_labels,
+            " = ",
+            formatC(compare_display, digits = 3, format = "f"),
+            " | p = ",
+            vapply(compare_p_values, format_plot_p_value, character(1))
+          )
+        )
+      )
+    }
+
+    edges$title <- paste0(
+      "<b>",
+      edges$from,
+      " - ",
+      edges$to,
+      "</b><br>",
+      "Status: ",
+      current_state_labels,
+      "<br>",
+      active_titles,
+      if (!is.null(compare_result)) paste0("<br>", compare_titles) else ""
+    )
+
     min_len <- 100
     max_len <- 500
     edges$length <- (1 - strengths) * (max_len - min_len) + min_len
 
-    # 3) Build the plot
     visNetwork(nodes, edges, width = "100%", height = "900px") |>
       visNodes(
         color = list(
@@ -2439,6 +3326,33 @@ server <- function(input, output, session) {
       visLayout(randomSeed = 123)
   })
 
+  output$download_associations_csv <- downloadHandler(
+    filename = function() {
+      paste0(
+        "associations_",
+        current_view_label(),
+        "_",
+        format(Sys.Date(), "%Y%m%d"),
+        ".csv"
+      )
+    },
+    content = function(file) {
+      export_df <- build_association_export_df(
+        cor_result = cor_matrix_reactive(),
+        data = selected_data_reactive(),
+        descriptions_df = var_descriptions(),
+        control_vars_selected = input$control_vars,
+        controls_applied = current_view_uses_controls(),
+        view_mode = current_view_label(),
+        threshold_num = input$threshold_num,
+        threshold_cat = input$threshold_cat,
+        threshold_p = input$threshold_p
+      )
+
+      utils::write.csv(export_df, file, row.names = FALSE, na = "")
+    }
+  )
+
   output$pairs_plot <- renderUI({
     req(input$main_tabs == "pairs_tab")
     pairs <- significant_pairs()
@@ -2449,6 +3363,7 @@ server <- function(input, output, session) {
       ))
     }
     df <- filtered_data_for_pairs()
+    tab_ids <- paste0(pairs$var1, "__PAIR__", pairs$var2)
 
     # Create observers for reverse buttons OUTSIDE the renderUI
     isolate({
@@ -2481,6 +3396,7 @@ server <- function(input, output, session) {
     tabs <- lapply(seq_len(nrow(pairs)), function(i) {
       v1 <- pairs$var1[i]
       v2 <- pairs$var2[i]
+      tab_id <- tab_ids[[i]]
 
       # Get the descriptions
       desc_lookup <- var_descriptions()
@@ -2488,8 +3404,31 @@ server <- function(input, output, session) {
       desc2 <- resolve_variable_description(v2, desc_lookup)
 
       plotname <- paste0("plot_", i)
+      comparison_plotname <- paste0("plot_unconditional_", i)
       is_num1 <- is.numeric(df[[v1]])
       is_num2 <- is.numeric(df[[v2]])
+      is_faded_pair <- isTRUE(pairs$faded[[i]])
+      is_conditional_only_pair <- isTRUE(pairs$conditional_only[[i]])
+      tab_title <- if (is_conditional_only_pair) {
+        tags$span(class = "conditional-only-pair-tab", paste0(v1, " vs ", v2))
+      } else if (is_faded_pair) {
+        tags$span(class = "faded-pair-tab", paste0(v1, " vs ", v2))
+      } else {
+        paste0(v1, " vs ", v2)
+      }
+      conditional_note_ui <- if (has_controls() && is_conditional_only_pair) {
+        tags$div(
+          class = "pair-note-positive",
+          "This association is retained in the conditional view but is not retained in the unconditional view under the current thresholds."
+        )
+      } else if (has_controls() && is_faded_pair) {
+        tags$div(
+          class = "pair-note-muted",
+          "This association is retained in the unconditional view but is no longer retained after conditioning under the current thresholds."
+        )
+      } else {
+        NULL
+      }
 
       # Create a clean subset without NAs for these variables
       plot_data <- df %>%
@@ -2497,10 +3436,8 @@ server <- function(input, output, session) {
 
       # Numeric vs numeric case
       if (is_num1 && is_num2) {
-        # Check if we have controls selected - use the full data to access controls
-        controls_exist <- has_controls() &&
-          !is.null(input$control_vars) &&
-          length(input$control_vars) > 0
+        controls_exist <- has_controls()
+        view_control_vars <- if (controls_exist) input$control_vars else NULL
 
         if (controls_exist) {
           # NEW: with controls : Added-variable plot (partial regression plot)
@@ -2515,7 +3452,7 @@ server <- function(input, output, session) {
             }
 
             # Create complete dataset with the pair variables AND control variables
-            all_vars <- c(v1, v2, input$control_vars)
+            all_vars <- c(v1, v2, view_control_vars)
 
             # Check if all required columns exist in full data
             missing_cols <- setdiff(all_vars, names(full_df))
@@ -2554,7 +3491,7 @@ server <- function(input, output, session) {
               {
                 # Calculate residuals after controlling for other variables
                 control_data <- plot_data_full[,
-                  input$control_vars,
+                  view_control_vars,
                   drop = FALSE
                 ]
 
@@ -2618,7 +3555,7 @@ server <- function(input, output, session) {
                       " | Slope = ",
                       slope_text,
                       "\nControls: ",
-                      paste(input$control_vars, collapse = ", ")
+                      paste(view_control_vars, collapse = ", ")
                     )
                   ) +
                   theme_minimal(base_size = 14) +
@@ -2680,6 +3617,87 @@ server <- function(input, output, session) {
                   )
               }
             )
+          })
+
+          output[[comparison_plotname]] <- renderPlot({
+            force(reversed_axes[[plotname]])
+
+            if (nrow(plot_data) > 0) {
+              is_reversed <- if (is.null(reversed_axes[[plotname]])) {
+                FALSE
+              } else {
+                reversed_axes[[plotname]]
+              }
+
+              x_var <- if (is_reversed) v2 else v1
+              y_var <- if (is_reversed) v1 else v2
+              x_desc <- if (is_reversed) desc2 else desc1
+              y_desc <- if (is_reversed) desc1 else desc2
+
+              current_cor <- cor(
+                plot_data[[v1]],
+                plot_data[[v2]],
+                use = "complete.obs"
+              )
+              r2_text <- format_plot_stat(current_cor^2)
+              p_val_text <- format_plot_p_value(
+                p_value_partial_cor(current_cor, nrow(plot_data), 0)
+              )
+
+              if (is_reversed) {
+                lm_regular <- lm(plot_data[[v1]] ~ plot_data[[v2]])
+              } else {
+                lm_regular <- lm(plot_data[[v2]] ~ plot_data[[v1]])
+              }
+              slope_regular <- coef(lm_regular)[2]
+              slope_text_regular <- ifelse(
+                is.na(slope_regular),
+                "NA",
+                round(slope_regular, 3)
+              )
+
+              ggplot(plot_data, aes(x = .data[[x_var]], y = .data[[y_var]])) +
+                geom_jitter(
+                  alpha = 0.6,
+                  color = "steelblue",
+                  width = 0.5,
+                  height = 0.5
+                ) +
+                geom_smooth(
+                  method = "lm",
+                  se = FALSE,
+                  color = "darkred",
+                  linewidth = 1
+                ) +
+                labs(
+                  x = x_desc,
+                  y = y_desc,
+                  title = "Unconditional Scatter Plot",
+                  subtitle = paste0(
+                    "R² = ",
+                    r2_text,
+                    " | p-value = ",
+                    p_val_text,
+                    " | Slope = ",
+                    slope_text_regular
+                  )
+                ) +
+                scale_x_continuous(
+                  labels = label_number(big.mark = ",", decimal.mark = ".")
+                ) +
+                scale_y_continuous(
+                  labels = label_number(big.mark = ",", decimal.mark = ".")
+                ) +
+                theme_minimal(base_size = 14) +
+                theme(
+                  plot.title = element_text(face = "bold"),
+                  plot.subtitle = element_text(color = "gray40", size = 10),
+                  plot.title.position = "plot"
+                )
+            } else {
+              plot.new()
+              text(0.5, 0.5, "No valid data available", cex = 1.5, adj = 0.5)
+            }
           })
         } else {
           # WITHOUT CONTROLS: Regular scatter plot
@@ -2772,10 +3790,22 @@ server <- function(input, output, session) {
 
         # NEW : add a "reverse axes" button in the pair plots window
         nav_panel(
-          paste0(v1, " vs ", v2),
+          title = tab_title,
+          value = tab_id,
           div(
             style = "position: relative;",
+            conditional_note_ui,
             plotOutput(plotname, height = "600px"),
+            if (controls_exist && isTRUE(show_unconditional_pair_plots())) {
+              tagList(
+                tags$hr(),
+                tags$div(
+                  style = "font-weight:600; margin: 10px 0 6px 0;",
+                  "Unconditional comparison"
+                ),
+                plotOutput(comparison_plotname, height = "600px")
+              )
+            },
             # Button to reverse axes
             div(
               style = "position: absolute; top: 10px; right: 10px;",
@@ -2798,9 +3828,8 @@ server <- function(input, output, session) {
             ))
           }
 
-          controls_exist <- has_controls() &&
-            !is.null(input$control_vars) &&
-            length(input$control_vars) > 0
+          controls_exist <- has_controls()
+          view_control_vars <- if (controls_exist) input$control_vars else NULL
 
           full_df <- data_env$full_data()
           if (is.null(full_df)) {
@@ -2810,7 +3839,7 @@ server <- function(input, output, session) {
           all_vars <- c(
             v1,
             v2,
-            if (controls_exist) input$control_vars else NULL
+            if (controls_exist) view_control_vars else NULL
           )
           df_full <- full_df[, all_vars, drop = FALSE]
           df_full <- df_full[complete.cases(df_full), , drop = FALSE]
@@ -2825,7 +3854,7 @@ server <- function(input, output, session) {
           cache_key <- make_pair_cache_key(
             v1,
             v2,
-            if (controls_exist) input$control_vars else NULL
+            if (controls_exist) view_control_vars else NULL
           )
           assoc_res <- get_cached_pair_result(pair_cache, cache_key)
 
@@ -2834,7 +3863,7 @@ server <- function(input, output, session) {
               assoc_res <- compute_conditional(
                 x_vec = df_full[[v1]],
                 y_vec = df_full[[v2]],
-                Zdf = df_full[, input$control_vars, drop = FALSE]
+                Zdf = df_full[, view_control_vars, drop = FALSE]
               )
               assoc_res <- set_cached_pair_result(pair_cache, cache_key, assoc_res)
             }
@@ -2871,6 +3900,7 @@ server <- function(input, output, session) {
           )
 
           D_display <- D[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
+          O_display <- O[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
           R_display <- R[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
           score_display <- display_score_matrix[
             submatrix_selection$rows,
@@ -2886,6 +3916,24 @@ server <- function(input, output, session) {
               100 * selected_score / total_score
             } else {
               NA_real_
+            }
+            fallback_reason_text <- submatrix_selection$fallback_reason
+            if (is.null(fallback_reason_text) || is.na(fallback_reason_text)) {
+              fallback_reason_text <- ""
+            }
+            selection_reason <- if (
+              identical(submatrix_selection$method, "heuristic") &&
+              nzchar(fallback_reason_text)
+            ) {
+              paste0(
+                " Heuristic fallback used because ",
+                fallback_reason_text,
+                "."
+              )
+            } else if (identical(submatrix_selection$method, "optimal")) {
+              " Exact binary optimization was used."
+            } else {
+              ""
             }
 
             display_info_ui <- tags$p(
@@ -2910,13 +3958,14 @@ server <- function(input, output, session) {
                   )
                 } else {
                   "."
-                }
+                },
+                selection_reason
               )
             )
           }
 
-          # Build table for display: values = R, color = R
-          display_df <- as.data.frame.matrix(round(R_display, 2))
+          # Build table for display: values = O, color = R
+          display_df <- as.data.frame.matrix(O_display)
           display_df <- tibble::rownames_to_column(display_df, var = v1)
 
           # Range for residual coloring
@@ -2929,16 +3978,20 @@ server <- function(input, output, session) {
             colname <- names(display_df)[j]
 
             if (colname == v1) {
-              colDef(name = desc1, minWidth = 140)
+              colDef(
+                name = paste0(desc1, " (row levels)"),
+                minWidth = 160
+              )
             } else {
               colDef(
                 name = colname,
                 align = "center",
                 cell = function(value, index) {
                   row_name <- display_df[[v1]][index]
+                  o_val <- O_display[row_name, colname]
                   r_val <- R_display[row_name, colname]
 
-                  if (is.na(r_val)) {
+                  if (is.na(r_val) || is.na(o_val)) {
                     return(div(
                       style = "background-color:#f8f9fa; padding:4px; min-height:1.6em;",
                       ""
@@ -2961,13 +4014,20 @@ server <- function(input, output, session) {
                       bg_col,
                       "; padding:4px; min-height:1.6em; font-weight:500;"
                     ),
-                    format(round(as.numeric(r_val), 2), nsmall = 2)
+                    format(as.integer(round(as.numeric(o_val))), big.mark = ",", trim = TRUE)
                   )
                 }
               )
             }
           })
           names(column_defs) <- names(display_df)
+
+          column_groups <- list(
+            colGroup(
+              name = desc2,
+              columns = setdiff(names(display_df), v1)
+            )
+          )
 
           tagList(
             h4(assoc_title),
@@ -2986,14 +4046,234 @@ server <- function(input, output, session) {
             ),
             tags$p(
               style = "font-size:0.85em; color:#666;",
-              "Cell values and colors show Pearson residuals R: red = over-represented, blue = under-represented, darker = stronger."
+              "Cell values show observed counts O; colors show Pearson residuals R: red = over-represented, blue = under-represented, darker = stronger."
             ),
             display_info_ui,
-            make_table(display_df, column_defs)
+            make_table(display_df, column_defs, column_groups = column_groups)
           )
         })
 
-        nav_panel(paste0(v1, " vs ", v2), uiOutput(plotname))
+        if (has_controls()) {
+          output[[comparison_plotname]] <- renderUI({
+            if (nrow(plot_data) == 0) {
+              return(div(
+                "No valid data available",
+                style = "padding: 20px; text-align: center;"
+              ))
+            }
+
+            full_df <- data_env$full_data()
+            if (is.null(full_df)) {
+              full_df <- data()
+            }
+
+            df_full <- full_df[, c(v1, v2), drop = FALSE]
+            df_full <- df_full[complete.cases(df_full), , drop = FALSE]
+
+            if (nrow(df_full) == 0) {
+              return(div(
+                "No complete data available",
+                style = "padding: 20px; text-align: center;"
+              ))
+            }
+
+            cache_key <- make_pair_cache_key(v1, v2, NULL)
+            assoc_res <- get_cached_pair_result(pair_cache, cache_key)
+
+            if (is.null(assoc_res)) {
+              assoc_res <- compute_unconditional(
+                x_vec = df_full[[v1]],
+                y_vec = df_full[[v2]]
+              )
+              assoc_res <- set_cached_pair_result(pair_cache, cache_key, assoc_res)
+            }
+
+            O <- assoc_res$O
+            E0 <- assoc_res$E0
+            D <- assoc_res$D
+            R <- assoc_res$R
+
+            validate(
+              need(
+                !is.null(D) && !is.null(R),
+                "Could not compute local association table."
+              )
+            )
+
+            display_score_matrix <- compute_catcat_display_scores(O, E0)
+            submatrix_selection <- select_catcat_display_submatrix(
+              display_score_matrix,
+              max_dim = 7L
+            )
+
+            D_display <- D[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
+            O_display <- O[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
+            R_display <- R[submatrix_selection$rows, submatrix_selection$cols, drop = FALSE]
+            score_display <- display_score_matrix[
+              submatrix_selection$rows,
+              submatrix_selection$cols,
+              drop = FALSE
+            ]
+
+            display_info_ui <- NULL
+            if (isTRUE(submatrix_selection$reduced)) {
+              total_score <- sum(display_score_matrix, na.rm = TRUE)
+              selected_score <- sum(score_display, na.rm = TRUE)
+              coverage_pct <- if (total_score > 0) {
+                100 * selected_score / total_score
+              } else {
+                NA_real_
+              }
+              fallback_reason_text <- submatrix_selection$fallback_reason
+              if (is.null(fallback_reason_text) || is.na(fallback_reason_text)) {
+                fallback_reason_text <- ""
+              }
+              selection_reason <- if (
+                identical(submatrix_selection$method, "heuristic") &&
+                nzchar(fallback_reason_text)
+              ) {
+                paste0(
+                  " Heuristic fallback used because ",
+                  fallback_reason_text,
+                  "."
+                )
+              } else if (identical(submatrix_selection$method, "optimal")) {
+                " Exact binary optimization was used."
+              } else {
+                ""
+              }
+
+              display_info_ui <- tags$p(
+                style = "font-size:0.85em; color:#666;",
+                paste0(
+                  "Large table detected (",
+                  nrow(D),
+                  "x",
+                  ncol(D),
+                  " = ",
+                  nrow(D) * ncol(D),
+                  " cells). Showing the best ",
+                  nrow(D_display),
+                  "x",
+                  ncol(D_display),
+                  " submatrix selected from squared Pearson-residual scores",
+                  if (is.finite(coverage_pct)) {
+                    paste0(
+                      " (",
+                      round(coverage_pct, 1),
+                      "% of total score)."
+                    )
+                  } else {
+                    "."
+                  },
+                  selection_reason
+                )
+              )
+            }
+
+            display_df <- as.data.frame.matrix(O_display)
+            display_df <- tibble::rownames_to_column(display_df, var = v1)
+
+            max_abs_r <- max(abs(R_display), na.rm = TRUE)
+            if (!is.finite(max_abs_r) || max_abs_r == 0) {
+              max_abs_r <- 1
+            }
+
+            column_defs <- lapply(seq_along(display_df), function(j) {
+              colname <- names(display_df)[j]
+
+              if (colname == v1) {
+                colDef(
+                  name = paste0(desc1, " (row levels)"),
+                  minWidth = 160
+                )
+              } else {
+                colDef(
+                  name = colname,
+                  align = "center",
+                  cell = function(value, index) {
+                    row_name <- display_df[[v1]][index]
+                    o_val <- O_display[row_name, colname]
+                    r_val <- R_display[row_name, colname]
+
+                    if (is.na(r_val) || is.na(o_val)) {
+                      return(div(
+                        style = "background-color:#f8f9fa; padding:4px; min-height:1.6em;",
+                        ""
+                      ))
+                    }
+
+                    intensity <- min(1, abs(r_val) / max_abs_r)
+                    bg_col <- if (r_val >= 0) {
+                      rgb(1, 1 - intensity, 1 - intensity)
+                    } else {
+                      rgb(1 - intensity, 1 - intensity, 1)
+                    }
+
+                    div(
+                      style = paste0(
+                        "background-color:",
+                        bg_col,
+                        "; padding:4px; min-height:1.6em; font-weight:500;"
+                      ),
+                      format(as.integer(round(as.numeric(o_val))), big.mark = ",", trim = TRUE)
+                    )
+                  }
+                )
+              }
+            })
+            names(column_defs) <- names(display_df)
+
+            column_groups <- list(
+              colGroup(
+                name = desc2,
+                columns = setdiff(names(display_df), v1)
+              )
+            )
+
+            tagList(
+              h4("Unconditional categorical association"),
+              tags$p(
+                style = "font-size:0.9em; color:#666;",
+                paste0(
+                  "VL = ",
+                  format_plot_stat(assoc_res$VL),
+                  " | p-value = ",
+                  format_plot_p_value(assoc_res$p_value)
+                )
+              ),
+              tags$p(
+                style = "font-size:0.85em; color:#666;",
+                paste0("Rows: ", desc1, " | Columns: ", desc2)
+              ),
+              tags$p(
+                style = "font-size:0.85em; color:#666;",
+                "Cell values show observed counts O; colors show Pearson residuals R: red = over-represented, blue = under-represented, darker = stronger."
+              ),
+              display_info_ui,
+              make_table(display_df, column_defs, column_groups = column_groups)
+            )
+          })
+        }
+
+        nav_panel(
+          title = tab_title,
+          value = tab_id,
+          tagList(
+            conditional_note_ui,
+            uiOutput(plotname),
+            if (has_controls() && isTRUE(show_unconditional_pair_plots())) {
+              tagList(
+                tags$hr(),
+                tags$div(
+                  style = "font-weight:600; margin: 10px 0 6px 0;",
+                  "Unconditional comparison"
+                ),
+                uiOutput(comparison_plotname)
+              )
+            }
+          )
+        )
       } else {
         # Mixed case (numeric vs categorical)
         if (is_num1) {
@@ -3015,10 +4295,8 @@ server <- function(input, output, session) {
             return()
           }
 
-          # Do we have controls selected?
-          controls_exist <- has_controls() &&
-            !is.null(input$control_vars) &&
-            length(input$control_vars) > 0
+          controls_exist <- has_controls()
+          view_control_vars <- if (controls_exist) input$control_vars else NULL
 
           # If no controls: keep your original unconditional means plot
           if (!controls_exist) {
@@ -3087,7 +4365,7 @@ server <- function(input, output, session) {
               full_df <- data()
             }
 
-            all_vars <- c(num_var, cat_var, input$control_vars)
+            all_vars <- c(num_var, cat_var, view_control_vars)
 
             # Check that all needed columns exist
             missing_cols <- setdiff(all_vars, names(full_df))
@@ -3110,7 +4388,7 @@ server <- function(input, output, session) {
             df_full <- data.frame(
               num_var = full_df[[num_var]],
               cat_var = as.factor(full_df[[cat_var]]),
-              full_df[, input$control_vars, drop = FALSE]
+              full_df[, view_control_vars, drop = FALSE]
             )
 
             df_full <- stats::na.omit(df_full)
@@ -3310,13 +4588,107 @@ server <- function(input, output, session) {
           }
         })
 
+        if (has_controls()) {
+          output[[comparison_plotname]] <- renderPlot({
+            if (nrow(plot_data) == 0) {
+              plot.new()
+              text(0.5, 0.5, "No valid data available", cex = 1.5, adj = 0.5)
+              return()
+            }
+
+            df_sum <- plot_data |>
+              group_by(.data[[cat_var]]) |>
+              summarise(
+                mean_val = mean(.data[[num_var]], na.rm = TRUE),
+                .groups = "drop"
+              ) |>
+              arrange(mean_val) |>
+              mutate(
+                {{ cat_var }} := factor(
+                  .data[[cat_var]],
+                  levels = .data[[cat_var]]
+                )
+              )
+
+            res_eta <- calculate_partial_eta_squared_with_F(
+              num_var = plot_data[[num_var]],
+              cat_var = plot_data[[cat_var]],
+              control_data = NULL
+            )
+            assoc_text <- format_plot_stat(res_eta$eta_sq)
+            p_val_text <- format_plot_p_value(res_eta$p_value)
+
+            ggplot(df_sum, aes(x = .data[[cat_var]], y = mean_val)) +
+              geom_col(fill = "steelblue", width = 0.6) +
+              geom_text(
+                aes(
+                  label = format(
+                    round(mean_val, 2),
+                    big.mark = ",",
+                    decimal.mark = "."
+                  )
+                ),
+                hjust = 1.1,
+                color = "white",
+                size = 4
+              ) +
+              labs(
+                x = desc_cat,
+                y = paste0('Mean of "', desc_num, '"'),
+                title = "Unconditional Group Means Plot",
+                subtitle = paste0(
+                  "Eta² = ",
+                  assoc_text,
+                  " | p-value = ",
+                  p_val_text
+                )
+              ) +
+              scale_y_continuous(
+                labels = label_number(big.mark = ",", decimal.mark = ".")
+              ) +
+              theme_minimal(base_size = 14) +
+              theme(
+                plot.title = element_text(face = "bold"),
+                plot.subtitle = element_text(color = "gray40", size = 10),
+                plot.title.position = "plot"
+              ) +
+              coord_flip()
+          })
+        }
+
         nav_panel(
-          paste0(v1, " vs ", v2),
-          plotOutput(plotname, height = "600px")
+          title = tab_title,
+          value = tab_id,
+          tagList(
+            conditional_note_ui,
+            plotOutput(plotname, height = "600px"),
+            if (has_controls() && isTRUE(show_unconditional_pair_plots())) {
+              tagList(
+                tags$hr(),
+                tags$div(
+                  style = "font-weight:600; margin: 10px 0 6px 0;",
+                  "Unconditional comparison"
+                ),
+                plotOutput(comparison_plotname, height = "600px")
+              )
+            }
+          )
         )
       }
     })
-    tagList(navset_card_tab(id = "bivariate_tabs", !!!tabs))
+
+    selected_tab <- active_pair_plot_tab()
+    if (is.null(selected_tab) || !(selected_tab %in% tab_ids)) {
+      selected_tab <- tab_ids[[1]]
+    }
+
+    tagList(
+      navset_card_tab(
+        id = "bivariate_tabs",
+        selected = selected_tab,
+        !!!tabs
+      )
+    )
   })
 
 }
