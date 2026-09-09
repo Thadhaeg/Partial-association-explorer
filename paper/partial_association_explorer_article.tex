@@ -117,7 +117,13 @@ numerical--numerical pairs, $\eta^2$ and partial $\eta^2$ for
 numerical--categorical pairs, and likelihood-ratio-based coefficients $V_L$
 and $V_{L\mid Z}$ for categorical--categorical pairs. All measures are
 described in Section~\ref{sec:framework}, and additional computational details
-are collected in the appendix.
+are collected in the Appendix.
+
+All screenshots and illustrative examples in the article use the Belgian data
+from the 2011 European Social Survey (ESS). The ESS is a cross-national survey
+covering social attitudes, behaviours, and socio-demographic characteristics;
+the Belgian extract is useful here because it combines numerical variables,
+categorical survey items, and plausible background controls such as age.
 
 The remainder of the article is organized as follows. Section~\ref{sec:overview}
 describes the software workflow and outputs. Section~\ref{sec:framework}
@@ -128,7 +134,7 @@ illustrative workflow showing how the software can both remove a confounded
 association and reveal a hidden one. Section~\ref{sec:related} situates the app
 relative to related software, and Section~\ref{sec:discussion} concludes with
 strengths, limitations, and possible extensions. Additional mathematical
-details are collected in the appendix.
+details are collected in the Appendix.
 
 \section{Software overview and workflow}
 \label{sec:overview}
@@ -172,25 +178,27 @@ formal test, and one local plot adapted to the data type.
 
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
+\begin{minipage}[c][0.275\textheight][c]{0.78\linewidth}
 \centering
-\includegraphics[width=\linewidth]{section2_variable_selection.jpg}
+\includegraphics[width=\linewidth,height=0.265\textheight,trim=0 323 0 0,clip,keepaspectratio]{section2_variable_selection.jpg}
+\end{minipage}
 \par\smallskip
 \small Variable and control selection.
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
+
+\medskip
+
+\begin{minipage}[c][0.275\textheight][c]{0.78\linewidth}
 \centering
-\includegraphics[width=\linewidth]{section2_network.jpg}
+\includegraphics[width=\linewidth,height=0.265\textheight,keepaspectratio]{section2_network.jpg}
+\end{minipage}
 \par\smallskip
 \small Filtered association network.
-\end{minipage}
 \caption{\label{fig:overviewshots} Workflow screens from \appname{} using the
 2011 Belgian wave of the European Social Survey. The interface moves from
 variable selection to a filtered network of retained associations.}
 \end{figure}
 
-\begin{table}[t!]
+\begin{table}[H]
 \centering
 \setlength{\tabcolsep}{7pt}
 \renewcommand{\arraystretch}{1.35}
@@ -230,7 +238,8 @@ the effect of adjustment can be inspected visually.
 \label{sec:numnum}
 
 Let $X$ and $Y$ be numerical variables observed on $n$ units. Without controls,
-the software summarizes the association by Pearson's correlation coefficient
+the software summarizes the association by Pearson's product-moment correlation
+coefficient \citep{Pearson1896}
 \begin{equation}
 r_{XY} =
 \frac{\sum_{t=1}^{n} (X_t - \bar{X})(Y_t - \bar{Y})}
@@ -239,7 +248,8 @@ r_{XY} =
 \label{eq:pearson}
 \end{equation}
 and filters the network on the corresponding $R^2 = r_{XY}^2$. The null
-hypothesis $H_0: r_{XY} = 0$ is tested with the usual statistic
+hypothesis $H_0: r_{XY} = 0$ is tested against
+$H_1: r_{XY} \ne 0$ with the usual statistic
 \begin{equation}
 t = r_{XY}\sqrt{\frac{n-2}{1-r_{XY}^2}},
 \label{eq:t-pearson}
@@ -255,7 +265,8 @@ r_{XY\cdot Z} = \mathrm{cor}(\tilde{X}, \tilde{Y}).
 \label{eq:partial-r}
 \end{equation}
 Again the network is filtered by the squared quantity $R^2_{XY\cdot Z}$.
-Under $H_0: r_{XY\cdot Z} = 0$, the test statistic is
+Under $H_0: r_{XY\cdot Z} = 0$, against
+$H_1: r_{XY\cdot Z} \ne 0$, the test statistic is
 \begin{equation}
 t = r_{XY\cdot Z}\sqrt{\frac{n-q-2}{1-r_{XY\cdot Z}^2}},
 \label{eq:t-partial}
@@ -267,10 +278,9 @@ cases. Without controls, the local display is a scatter plot with fitted linear
 trend. With controls, it becomes an added-variable plot, that is, a scatter
 plot of the residuals of $X$ and $Y$ after removing the linear contribution of
 $Z$. Additional computational details for the unconditional and conditional
-numerical--numerical cases are collected in Appendix~\ref{app:numnum}
-(p.~\pageref{app:numnum}).
+numerical--numerical cases are collected in Appendix~\ref{app:numnum}.
 
-Reading these plots is direct. In the unconditional panel, the slope and the
+Reading these plots is straightforward. In the unconditional panel, the slope and the
 overall cloud summarize the marginal association: an upward fitted line means
 that larger values of one variable tend to go with larger values of the other.
 In Figure~\ref{fig:numnumshots}, the positive pattern suggests that respondents
@@ -281,19 +291,15 @@ the linear effect of the control has been removed from both axes.
 
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{section3.1_unconditional_pairplot_pplfair_trstplt.jpg}
+\includegraphics[width=0.92\linewidth,trim=0 16 0 17,clip]{section3.1_unconditional_pairplot_pplfair_trstplt.jpg}
 \par\smallskip
 \small Unconditional pair plot.
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{section3.1_conditional_pairplot_pplfair_trstplt_agea.jpg}
+
+\medskip
+
+\includegraphics[width=0.92\linewidth,trim=33 0 33 0,clip]{section3.1_conditional_pairplot_pplfair_trstplt_agea.jpg}
 \par\smallskip
 \small Conditional pair plot with age of respondent (\code{agea}) as control.
-\end{minipage}
 \caption{\label{fig:numnumshots} Illustrative numerical--numerical pair plots
 from the 2011 Belgian ESS for perceived fairness of others (\code{pplfair})
 and trust in politicians (\code{trstplt}). The conditional version replaces
@@ -361,7 +367,7 @@ These residualized means show the remaining group differences after removing
 the linear contribution of the controls. Explicit computational formulas,
 including the definitions of $\mathrm{SSB}$, $\mathrm{SST}$, $\mathrm{SSW}$,
 and the residualized-means construction, are collected in
-Appendix~\ref{app:numcat} (p.~\pageref{app:numcat}).
+Appendix~\ref{app:numcat}.
 
 These plots should be read vertically. Without controls, the displayed points
 or bars are raw group means. With controls, they are means of residualized
@@ -391,19 +397,15 @@ fully explain it.
 
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{section3.2_unconditional_pairplot_alcfreq_pplfair.jpg}
+\includegraphics[width=0.92\linewidth,trim=0 2 0 2,clip]{section3.2_unconditional_pairplot_alcfreq_pplfair.jpg}
 \par\smallskip
 \small Unconditional pair plot.
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{section3.2_conditional_pairplot_alcfreq_pplfair_agea.jpg}
+
+\medskip
+
+\includegraphics[width=0.92\linewidth,trim=23 0 23 0,clip]{section3.2_conditional_pairplot_alcfreq_pplfair_agea.jpg}
 \par\smallskip
 \small Conditional pair plot with age of respondent (\code{agea}) as control.
-\end{minipage}
 \caption{\label{fig:numcatshots} Illustrative numerical--categorical pair plots
 from the 2011 Belgian ESS for perceived fairness of others (\code{pplfair}) by
 frequency of alcohol consumption (\code{alcfreq}). The conditional view
@@ -416,7 +418,7 @@ of respondent (\code{agea}).}
 
 For categorical variables $X$ and $Y$ with $I$ and $J$ levels, respectively,
 the software treats the pair $(X,Y)$ as a single joint categorical outcome
-$W = (X,Y)$ with $K = IJ$ categories. The modelling strategy is based on
+$W = (X,Y)$ with $K = I \times J$ categories. The modelling strategy is based on
 baseline-category multinomial logits relative to the first cell.
 
 When controls are present, let $Z = (Z_1, \dots, Z_q)$ denote the control
@@ -448,9 +450,9 @@ change the fitted margins of $X$ and $Y$ without introducing any residual
 association between them. The interaction parameter $\gamma_{ij}$, present only
 in the alternative model, captures the remaining cell-specific association
 after accounting for these main effects and control contributions. The symbol
-$\delta$ is used later in the appendix for a different purpose, namely the
-control slopes in the residualization regression for numerical--categorical
-pair plots.
+$\delta$ is used later in Appendix~\ref{app:numcat} for a different purpose,
+namely the control slopes in the residualization regression for
+numerical--categorical pair plots.
 
 The implementation uses reference-category constraints. If the first level of
 $X$ and the first level of $Y$ are taken as baseline categories, then
@@ -535,7 +537,7 @@ The fitted null model also yields expected counts
 which reduce to the familiar independence expectations in the unconditional
 contingency-table case. Further computational details for the multinomial
 likelihood, expected counts, and local diagnostics are collected in
-Appendix~\ref{app:catcat} (p.~\pageref{app:catcat}).
+Appendix~\ref{app:catcat}.
 
 This design was chosen after considering Poisson log-linear alternatives.
 Log-linear models are elegant and standard for contingency tables
@@ -600,19 +602,15 @@ simple marginal independence.
 
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{section3.3_unconditional_pairplot_netusoft_facntr.jpg}
+\includegraphics[width=0.96\linewidth,height=0.24\textheight,keepaspectratio]{section3.3_unconditional_pairplot_netusoft_facntr}
 \par\smallskip
 \small Unconditional pair plot.
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width=\linewidth]{section3.3_conditional_pairplot_netusoft_facntr_agea.jpg}
+
+\medskip
+
+\includegraphics[width=0.96\linewidth,height=0.24\textheight,keepaspectratio]{section3.3_conditional_pairplot_netusoft_facntr_agea.jpg}
 \par\smallskip
 \small Conditional pair plot with age of respondent (\code{agea}) as control.
-\end{minipage}
 \caption{\label{fig:catcatshots} Illustrative categorical--categorical pair
 plots from the 2011 Belgian ESS for frequency of internet use
 (\code{netusoft}) and father born in country (\code{facntr}). The cells print
@@ -640,7 +638,8 @@ counts before evaluating the likelihood. If several observations share the same
 coded control vector, their contributions are accumulated once and weighted by
 their frequency. This does not change the model or the maximized likelihood, but
 it reduces the number of rows over which the categorical likelihood must be
-evaluated. The grouped likelihood is written explicitly in the appendix.
+evaluated. The grouped likelihood is written explicitly in
+Appendix~\ref{app:catcat}.
 
 Third, the categorical models are estimated with \code{optim()} using an
 analytic gradient rather than by finite-difference approximation. The
@@ -656,7 +655,8 @@ views, caching avoids refitting the same pairwise models unnecessarily.
 The app also includes a specific solution for large categorical pair
 plots. A full contingency table is displayed as long as the number of cells does
 not exceed $49$. Beyond that threshold, the app selects a submatrix with at
-most seven rows and seven columns. The selection score is the squared Pearson
+most seven rows and seven columns, that is, at most a $7 \times 7$ display.
+The selection score is the squared Pearson
 residual
 \begin{equation}
 S_{ij} = R_{ij}^2
@@ -703,7 +703,7 @@ $S_{ij}$. Because the display score and the cell value are both driven by
 $R_{ij}$, the selected submatrix emphasizes precisely the standardized local
 departures that the user ultimately sees. Additional details on the display
 score and the retained-score coverage statistic are given in
-Appendix~\ref{app:submatrix} (p.~\pageref{app:submatrix}).
+Appendix~\ref{app:submatrix}.
 
 Finally, the interface is designed to support comparison rather than only
 inspection. When controls are selected, the network view can be switched
@@ -726,27 +726,28 @@ a common association network.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width = 0.82\linewidth]{section5_variables_selection.jpg}
+\includegraphics[width=0.88\linewidth]{section5_variables_selection.jpg}
+\caption{\label{fig:variablesexample} Variable selection screen used in the
+illustrative workflow. The selected variables are frequency of internet use
+(\code{netusoft}), self-rated health (\code{health}), frequency of alcohol
+consumption (\code{alcfreq}), frequency of social meetings (\code{sclmeet}),
+and vaccination status (\code{vacc19}).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\linewidth,height=0.30\textheight,keepaspectratio]{section5_unconditional_network.jpg}
+\par\smallskip
+\small Unconditional association network.
 
 \medskip
 
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width = \linewidth]{section5_unconditional_network.jpg}
+\includegraphics[width=0.82\linewidth,height=0.30\textheight,keepaspectratio]{section5_conditional_network.jpg}
 \par\smallskip
-\small (a) Unconditional association network.
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
-\centering
-\includegraphics[width = \linewidth]{section5_conditional_network.jpg}
-\par\smallskip
-\small (b) Conditional association network with age of respondent (\code{agea}) as control.
-\end{minipage}
+\small Conditional association network with age of respondent (\code{agea}) as control.
 \caption{\label{fig:networkexample} Illustrative workflow in \appname{}.
-Top: selected analysis variables. Bottom-left: unconditional network.
-Bottom-right: conditional network after controlling for age of respondent
-(\code{agea}). The edge between self-rated health (\code{health}) and
+Top: unconditional network. Bottom: conditional network after controlling for
+age of respondent (\code{agea}). The edge between self-rated health (\code{health}) and
 frequency of internet use (\code{netusoft}) is retained without controls but
 disappears after conditioning on age, whereas the edge between frequency of
 social meetings (\code{sclmeet}) and vaccination status (\code{vacc19})
@@ -849,12 +850,12 @@ variables, the computation of formal tests for every selected pair, the
 likelihood-based treatment of categorical--categorical associations, and the
 expanded local diagnostics.
 
-Another relevant comparison is \emph{Sirius}, a Python and Django application
+\pkg{Sirius} is another relevant comparison: a Python and Django application
 for exploratory visualization of mixed data based on mutual information
-networks and backbone sparsification \citep{AdamsEtAl2021}. Sirius shares with
+networks and backbone sparsification \citep{AdamsEtAl2021}. \pkg{Sirius} shares with
 \appname{} the objective of helping users navigate heterogeneous dependence
 structures visually. The two tools nevertheless emphasize different tasks.
-Sirius uses a common information-theoretic score across mixed feature pairs and
+\pkg{Sirius} uses a common information-theoretic score across mixed feature pairs and
 focuses on network-level exploration, whereas \appname{} adopts
 pair-type-specific association measures, attaches a formal test to every edge,
 and gives users an explicit conditional workflow in which chosen control
@@ -867,9 +868,7 @@ More generally, analysts can assemble pieces of a similar workflow from base
 computed with standard correlation functions; numerical--categorical
 relationships can be assessed through linear models or ANOVA; and
 contingency-table analyses can be carried out with standard categorical-data
-tools. Some mixed-data packages instead focus on dimension reduction or
-multivariate description rather than pairwise conditional interpretation.
-However, assembling a workflow comparable to \appname{} usually requires moving
+tools. Assembling a workflow comparable to \appname{} usually requires moving
 manually between different model objects, plotting systems, and data
 representations. In contrast, \appname{} offers one interface in which all pair
 types are treated jointly, the network is filtered using a common visual
@@ -949,11 +948,9 @@ interface relies primarily on \pkg{shiny} \citep{Shiny}, \pkg{bslib}
 selection is performed with \pkg{lpSolve} \citep{lpSolve}.
 
 The screenshots included in this article were generated from the app as of
-2026-07-10. The code is available through the public GitHub repository and the
-manuscript can be complemented, before submission, with a fully reproducible
-analysis script if required by the review process.
+2026-07-10.
 
-\begin{thebibliography}{17}
+\begin{thebibliography}{20}
 
 \bibitem[Agresti(2013)]{Agresti2013}
 Agresti A (2013).
@@ -963,14 +960,15 @@ Agresti A (2013).
 \bibitem[Adams et~al.(2021)]{AdamsEtAl2021}
 Adams JL, Deluca TF, Danforth CM, Dodds PS, Zheng Y, Anastasakis K, Choi B,
 Min A, Bessey MM (2021).
-\newblock ``Sirius: A Mutual Information Tool for Exploratory Visualization of
-Mixed Data.''
+\newblock ``Sirius: Visualization of Mixed Features as a Mutual Information
+Network Graph.''
 \newblock arXiv:2106.05260.
 \newblock \url{https://arxiv.org/abs/2106.05260}.
+\newblock \doi{10.48550/arXiv.2106.05260}.
 
-\bibitem[Almende BV and Contributors and Thieurmel(2025)]{VisNetwork}
-Almende BV and Contributors, Thieurmel B (2025).
-\newblock \emph{\pkg{visNetwork}: Network Visualization Using vis.js Library}.
+\bibitem[Almende B.V. and Contributors and Thieurmel(2025)]{VisNetwork}
+Almende B.V. and Contributors, Thieurmel B (2025).
+\newblock \emph{\pkg{visNetwork}: Network Visualization using `vis.js' Library}.
 \newblock \proglang{R} package version 2.1.4,
 \url{https://CRAN.R-project.org/package=visNetwork}.
 \newblock \doi{10.32614/CRAN.package.visNetwork}.
@@ -989,12 +987,13 @@ Berkelaar M (2024).
 \url{https://CRAN.R-project.org/package=lpSolve}.
 \newblock \doi{10.32614/CRAN.package.lpSolve}.
 
-\bibitem[Chang et~al.(2026)]{Shiny}
+\bibitem[Chang et~al.(2025)]{Shiny}
 Chang W, Cheng J, Allaire J, Sievert C, Schloerke B, Xie Y, Allen J,
-McPherson J, Dipert A, Borges B (2026).
+McPherson J, Dipert A, Borges B (2025).
 \newblock \emph{\pkg{shiny}: Web Application Framework for \proglang{R}}.
-\newblock \proglang{R} package,
+\newblock \proglang{R} package version 1.11.1,
 \url{https://CRAN.R-project.org/package=shiny}.
+\newblock \doi{10.32614/CRAN.package.shiny}.
 
 \bibitem[Cox and Snell(1989)]{CoxSnell1989}
 Cox DR, Snell EJ (1989).
@@ -1044,6 +1043,15 @@ Nelder JA, Wedderburn RWM (1972).
 \newblock ``Generalized Linear Models.''
 \newblock \emph{Journal of the Royal Statistical Society. Series A},
 \textbf{135}(3), 370--384.
+\newblock \doi{10.2307/2344614}.
+
+\bibitem[Pearson(1896)]{Pearson1896}
+Pearson K (1896).
+\newblock ``VII. Mathematical Contributions to the Theory of Evolution. III.
+Regression, Heredity, and Panmixia.''
+\newblock \emph{Philosophical Transactions of the Royal Society of London.
+Series A}, \textbf{187}, 253--318.
+\newblock \doi{10.1098/rsta.1896.0007}.
 
 \bibitem[Pedersen(2024)]{tidygraph}
 Pedersen TL (2024).
@@ -1052,8 +1060,8 @@ Pedersen TL (2024).
 \url{https://CRAN.R-project.org/package=tidygraph}.
 \newblock \doi{10.32614/CRAN.package.tidygraph}.
 
-\bibitem[{\proglang{R} Core Team}(2026)]{R}
-{\proglang{R} Core Team} (2026).
+\bibitem[{\proglang{R} Core Team}(2025)]{R}
+{\proglang{R} Core Team} (2025).
 \newblock \emph{\proglang{R}: A Language and Environment for Statistical Computing}.
 \newblock \proglang{R} Foundation for Statistical Computing, Vienna, Austria.
 \newblock \url{https://www.R-project.org/}.
@@ -1067,7 +1075,8 @@ Sievert C, Cheng J, Aden-Buie G (2025).
 
 \bibitem[Soetewey et~al.(2026)]{SoeteweyHeuchenneClaesDescampe2026}
 Soetewey A, Heuchenne C, Claes A, Descampe A (2026).
-\newblock \emph{\pkg{AssociationExplorer}: A User-Friendly \pkg{shiny} Application for Exploring Associations and Visual Patterns}.
+\newblock ``AssociationExplorer: A user-friendly \pkg{shiny} application for
+exploring associations and visual patterns.''
 \newblock \emph{SoftwareX}, \textbf{33}, 102483.
 \newblock \doi{10.1016/j.softx.2025.102483}.
 
@@ -1084,16 +1093,20 @@ Wickham H, Bryan J (2026).
 
 \begin{appendix}
 
+\renewenvironment{equation}{\begin{equation*}}{\end{equation*}}
+\renewenvironment{align}{\begin{align*}}{\end{align*}}
+
 \section{Supplementary computational details for numerical--numerical associations}
 \label{app:numnum}
 
-This appendix records the explicit quantities computed by the app for
+This Appendix records the explicit quantities computed by the app for
 numerical--numerical pairs in the unconditional and conditional cases.
 
 \subsection{Unconditional case}
 
 Given numerical variables $X$ and $Y$ observed on $n$ units, the app first
-computes Pearson's correlation
+computes the same Pearson product-moment correlation coefficient as in
+Equation~\eqref{eq:pearson} \citep{Pearson1896}:
 \begin{equation}
 r_{XY}
 =
@@ -1295,8 +1308,8 @@ $Y$ on the controls has been removed.
 \label{app:catcat}
 
 The categorical--categorical module is based on a joint multinomial model for
-$W = (X, Y)$, treated as a single categorical outcome with $K = IJ$ possible
-cells.
+$W = (X, Y)$, treated as a single categorical outcome with
+$K = I \times J$ possible cells.
 
 \subsection{Unconditional case}
 
@@ -1401,7 +1414,7 @@ The conditional probabilities are
 
 To keep the main text readable, the theoretical definitions in
 Equations~\eqref{eq:loglik} and \eqref{eq:e0} are written observation by
-observation, indexed by $t$. In this appendix, the notation changes because
+observation, indexed by $t$. In this Appendix, the notation changes because
 the app groups observations that share the same coded control vector. The
 statistical definition is unchanged: only the bookkeeping differs, so repeated
 terms are replaced by counts.
@@ -1521,7 +1534,7 @@ zero-valued interaction parameters before optimization.
 \section{Large categorical tables and coverage of the displayed submatrix}
 \label{app:submatrix}
 
-For large categorical pair plots, the app optimizes on the score matrix
+For large categorical pair plots, the app optimizes over the score matrix
 $S_{ij} = R_{ij}^2$ defined in Equation~\eqref{eq:score}. If
 $\mathcal{S}$ denotes the selected submatrix, the app reports the proportion of
 total score retained in the display:
@@ -1533,13 +1546,14 @@ total score retained in the display:
 \label{eq:coverage}
 \end{equation}
 This percentage tells the user how much of the standardized residual structure
-remains visible after the full table has been trimmed to a manageable size.
+remains visible after the full table has been trimmed to at most a $7 \times 7$
+display.
 
-The choice of $S_{ij} = R_{ij}^2$ is deliberate. Because the pair plot prints
-$R_{ij}$ and colours cells according to the sign and magnitude of $R_{ij}$,
-selecting rows and columns through $R_{ij}^2$ prioritizes the largest
-standardized departures regardless of sign. This is more appropriate for
-display than local likelihood-ratio terms such as
+The choice of $S_{ij} = R_{ij}^2$ is deliberate. Although the pair plot prints
+the observed counts $O_{ij}$ inside cells, it colours cells according to the sign
+and magnitude of $R_{ij}$. Selecting rows and columns through $R_{ij}^2$
+therefore prioritizes the largest standardized departures regardless of sign.
+This is more appropriate for display than local likelihood-ratio terms such as
 $2\,O_{ij}\log(O_{ij}/\widehat{E}^{(0)}_{ij})$, which are asymmetric in over- and
 under-representation and become zero when $O_{ij}=0$. In particular, an empty
 cell that is highly unexpected under the fitted null model may still deserve to
