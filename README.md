@@ -1,69 +1,85 @@
-# AssociationProfiler
+# Partial Association Explorer
 
-**AssociationProfiler** is an open-source interactive **R Shiny** application for profiling unconditional and conditional associations in multivariate datasets containing numerical and categorical variables.
+**Partial Association Explorer** is an open-source **R Shiny** application for exploring dependence structures in datasets that contain both numerical and categorical variables.
 
-For every selected variable pair, the app computes a global association measure, a significance test, and local pairwise diagnostics adapted to the variable types. Users can filter an interactive association network by association strength and statistical significance, then inspect retained edges through harmonized pair plots.
+The app computes unconditional and conditional pairwise associations, performs statistical tests, displays an interactive association network, and provides local pair plots adapted to each variable type. It is designed for exploratory work in social science, economics, public health, and other fields where researchers often need to distinguish direct-looking associations from patterns driven by confounding variables.
 
-| Variable types | Unconditional measure | Conditional measure |
-|---|---|---|
-| Continuous vs. Continuous | Pearson's *r* | Partial *r* (added-variable regression) |
-| Continuous vs. Categorical | η² (ANOVA) | Partial η² (ANCOVA) |
-| Categorical vs. Categorical | *V*_L (Linfoot/Cox–Snell LR) | *V*_L\|Z (conditional LR) |
+Partial Association Explorer builds on the spirit of AssociationExplorer by adding conditional association analysis, significance tests, likelihood-based measures for categorical pairs, comparison views between unconditional and conditional networks, enhanced pair plots, and CSV export of association results.
 
 ---
 
-## Statement of need
+## What the app computes
 
-Many exploratory analyses start by asking which variables in a dataset are associated. This question is difficult when the dataset combines numerical variables, nominal or ordinal factors, and possible confounders. Classical correlation matrices cover only numerical variables; contingency-table measures do not extend naturally to mixed variable types; and marginal pairwise summaries can be misleading when two variables are both related to a background variable.
+For each selected pair of variables, the app chooses the measure and test according to the R type of the variables: numeric columns are treated as numerical variables, while all other columns are treated as categorical variables.
 
-AssociationProfiler addresses this as a software problem. It provides a unified workflow for computing and visualizing both global and local associations between all selected variable pairs, with support for optional control variables applied simultaneously across all pair types.
+| Pair type | Unconditional measure | Conditional measure | Test | Pair plot |
+|---|---|---|---|---|
+| Numerical vs. numerical | `R^2` from Pearson correlation | `R^2` from partial correlation | t-test | Scatter plot or added-variable residual plot |
+| Numerical vs. categorical | `eta^2` from ANOVA | Partial `eta^2` from ANCOVA | F-test | Group means or residualized group means |
+| Categorical vs. categorical | `V_L` | `V_L|Z` | Likelihood-ratio chi-square test | Contingency table with observed counts and Pearson residual colors |
+
+For numerical-numerical pairs, the signed Pearson or partial correlation is kept for interpretation, but the network filtering strength is `R^2`. For numerical-categorical pairs, the app reports and filters on `eta^2` or partial `eta^2`, not on `sqrt(eta^2)`.
 
 ---
 
-## Features
+## Main features
 
-### Upload and manage data
+### Data import and variable management
 
-- Import `.csv`, `.xlsx`, or `.xls` files
-- Automatically detects variable types (numerical vs. categorical)
-- Cleans variable names via `{janitor}`
-- Optionally upload a two-column variable-description file (`Variable`, `Description`) to annotate nodes in the network and the variables table
+- Import `.csv`, `.xlsx`, or `.xls` datasets.
+- Optionally upload a two-column variable-description file with columns `Variable` and `Description`.
+- Remove variables with no usable variation before analysis.
+- Detect numerical variables from their R type with `is.numeric()`; factors, character columns, ordered factors, and other non-numeric columns are treated as categorical.
+- Select observed variables and optional control variables.
+- Clear the selected observed-variable list with one button.
 
 ### Association analysis
 
-- Computes unconditional **and** conditional association measures depending on variable types and whether control variables are selected
-- **Categorical–categorical:** *V*_L uses a Linfoot/Cox–Snell transformation of the likelihood-ratio deviance from a structured multinomial model; *V*_L\|Z extends this to the conditional case with numerical or categorical controls as regression covariates
-- **Numerical–categorical:** η² (ANOVA) without controls; partial η² (ANCOVA extra-sum-of-squares) with controls; both reported as sqrt(η²) for comparability with the other measures
-- **Numerical–numerical:** Pearson's *r* without controls; partial *r* via added-variable regression with controls
-- Displays effect-size **strength indicators** and test statistics (χ², *F*, *t*) with *p*-values
+- Compute all pairwise associations among the selected observed variables.
+- Compute unconditional associations when no controls are selected.
+- Compute conditional or partial associations when control variables are selected.
+- Apply the same selected controls consistently across numerical-numerical, numerical-categorical, and categorical-categorical pairs.
+- Cache pair results during a session so repeated views do not recompute unchanged pair problems unnecessarily.
 
 ### Association network
 
-- Builds an interactive network graph (via `visNetwork`) where nodes are variables and edge widths reflect association strength
-- Adjustable sliders filter edges by:
-  - *R*² / η² range for numerical–numerical and numerical–categorical pairs
-  - *V*_L range for categorical–categorical pairs
-  - *p*-value range for all pairs
-- Isolated nodes (no edges above threshold) are pruned automatically
-- Hover over edges to see the association measure and value; hover over nodes to see variable descriptions
+- Display an interactive `visNetwork` graph where nodes are variables and edges are retained associations.
+- Filter edges with three sliders: `R^2 / eta^2` for numerical-numerical and numerical-categorical pairs, `V_L` for categorical-categorical pairs, and p-value for all pairs.
+- Prune isolated nodes automatically after filtering.
+- Hover over edges to inspect the association measure, value, and p-value.
+- Hover over nodes to inspect variable descriptions when a description file is provided.
+- Export the association table as CSV, including variable names, descriptions, measures, p-values, and selected controls.
+
+When controls are selected, the network can be switched between the conditional and unconditional views. In the selected view, edges that newly appear relative to the other view are shown in green, while edges that disappear relative to the other view are shown in a muted dashed style.
 
 ### Pair plots
 
-Bivariate visualisations for all retained edges, adapted to variable type and control selection:
+The pair plot tab gives a local view of each retained association.
 
-- **Numerical–numerical:** scatter plot with linear trend (no controls) or added-variable plot of residuals (with controls); axes can be reversed
-- **Numerical–categorical:** group mean plot of the raw outcome (no controls) or of the residualized outcome after removing control effects (with controls)
-- **Categorical–categorical:** contingency table coloured by Pearson residuals *R*_ij = (O_ij − E⁰_ij) / √E⁰_ij, with cell values showing observed-minus-expected deviations *D*_ij; interaction parameter table (γ_ij) shown when available
+- Numerical-numerical pairs show a scatter plot without controls or an added-variable plot with controls.
+- Numerical-categorical pairs show group means without controls or residualized group means with controls.
+- Categorical-categorical pairs show a contingency table where cell values are observed counts `O_ij` and cell colors are Pearson residuals `R_ij`.
+- Association values and p-values are displayed directly on the plot.
+- Variable descriptions and selected controls are displayed when available.
+- When controls are selected, the unconditional pair plot can be shown below the conditional plot for direct comparison.
+- Associations that disappear after conditioning remain available in the pair plot list with a faded style.
+- Associations that appear only after conditioning are highlighted with a light green style.
 
-### Optimal submatrix display
+For large categorical-categorical tables, the app displays a reduced but informative submatrix. If the table has more than 49 cells, it selects at most 7 rows and 7 columns by maximizing the sum of squared Pearson residual scores,
 
-Large contingency tables are truncated to an informative submatrix: the app selects rows and columns that maximise the sum of cell-level likelihood-ratio contributions C_ij = 2 O_ij log(O_ij / E⁰_ij), using `lpSolve` when available and a heuristic fallback otherwise.
+```text
+S_ij = R_ij^2.
+```
+
+The app uses `lpSolve` for this submatrix selection when available and falls back to a deterministic heuristic when the optimization problem cannot be solved. The interface reports when the fallback is used.
 
 ---
 
 ## Installation
 
-AssociationProfiler requires R (≥ 4.1 recommended). Install the required packages:
+Partial Association Explorer requires R. R version 4.1 or later is recommended.
+
+Install the required packages:
 
 ```r
 install.packages(c(
@@ -74,14 +90,13 @@ install.packages(c(
 ))
 ```
 
-Clone the repository and launch the app:
+Clone the repository and launch the app from the repository root:
 
 ```r
-# From the repository root
 shiny::runApp("app.r")
 ```
 
-Or run directly from GitHub:
+You can also run the app directly from GitHub:
 
 ```r
 shiny::runGitHub("Partial-association-explorer", "Thadhaeg")
@@ -89,35 +104,39 @@ shiny::runGitHub("Partial-association-explorer", "Thadhaeg")
 
 ---
 
-## Usage
+## Basic workflow
 
-1. **Data tab** — Upload a CSV or Excel dataset. Optionally upload a variable-description file (two columns: `Variable`, `Description`). Click **Process data**.
-2. **Variables tab** — Select variables to include in the analysis and (optionally) control variables to adjust for. Control variables are used for all association computations but do not appear as network nodes. Click **Visualize all associations**.
-3. **Correlation Network tab** — Adjust the three threshold sliders to filter edges by association strength and *p*-value. The network summary reports the number of visible nodes and edges, broken down by pair type.
-4. **Pairs Plots tab** — Click **See pairs plots** to inspect bivariate visualisations for all retained edges.
+1. Upload a CSV or Excel dataset.
+2. Optionally upload a variable-description file with columns `Variable` and `Description`.
+3. Select the variables to explore.
+4. Optionally select control variables.
+5. Click **Visualize all associations**.
+6. Filter the network by association strength and p-value.
+7. Inspect retained, appearing, and disappearing associations through pair plots.
+8. Export the association results if needed.
 
 ---
 
-## Example dataset
+## Example data and paper
 
-The repository includes a Belgian subset of the European Social Survey (Round 11) in `data/ESS11_BE_data.csv`, which can be used to explore associations between socio-demographic variables with and without control variables.
+The repository includes a Belgian subset of the European Social Survey 2011 in [`data/ESS11_BE_data.csv`](data/ESS11_BE_data.csv). The paper draft and screenshots used to document the software are available in [`paper/`](paper/).
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting bugs, suggesting enhancements, and submitting pull requests.
+Contributions are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening an issue or pull request.
 
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+This project follows the [Partial Association Explorer Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
 ## Citation
 
-If you use AssociationProfiler in your work, please cite the accompanying paper (citation details to be updated upon publication).
+If you use Partial Association Explorer in academic work, please cite the accompanying paper once citation details are finalized. Until then, the current manuscript is available in [`paper/partial_association_explorer_article.pdf`](paper/partial_association_explorer_article.pdf).
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+The source code is distributed under the [`MIT License`](LICENSE). Data files, screenshots, and manuscript material may be subject to their own citation or reuse requirements.

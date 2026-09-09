@@ -17,5 +17,20 @@
 *_cache/
 *_files/
 
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.spl
+*.synctex.gz
+*.toc
+*.vrb
+
 # output
 *.html
