@@ -97,7 +97,7 @@ global measures and residual-based local displays.
 
 The intended audience is broader than a purely methodological readership. In
 social-science and economic applications, users often begin with a long list of
-survey items, behavioural indicators, institutional variables, and demographic
+survey items, behavioral indicators, institutional variables, and demographic
 controls, and the first challenge is to understand which relationships deserve
 closer study. \appname{} is useful precisely because it helps users move beyond
 raw pairwise description. An unconditional screening can be followed by the
@@ -121,7 +121,7 @@ are collected in the Appendix.
 
 All screenshots and illustrative examples in the article use the Belgian data
 from the 2011 European Social Survey (ESS). The ESS is a cross-national survey
-covering social attitudes, behaviours, and socio-demographic characteristics;
+covering social attitudes, behaviors, and socio-demographic characteristics;
 the Belgian extract is useful here because it combines numerical variables,
 categorical survey items, and plausible background controls such as age.
 
@@ -166,9 +166,9 @@ by a range of $p$-values. When controls are selected, the app can also display
 the conditional network together with a visual comparison to the corresponding
 unconditional view. The user can switch the displayed network from the
 unconditional structure to the conditional one and back again. In that
-comparison mode, the edge colours are interpreted relative to the specific view
+comparison mode, the edge colors are interpreted relative to the specific view
 that is currently shown: green edges are present only in the displayed view,
-whereas muted grey dotted edges belong only to the alternative view and are
+whereas muted gray dotted edges belong only to the alternative view and are
 shown for comparison.
 
 The core workflow is summarized in Table~\ref{tab:measures}. The software uses
@@ -408,7 +408,7 @@ of respondent (\code{agea}).}
 
 For categorical variables $X$ and $Y$ with $I$ and $J$ levels, respectively,
 the software treats the pair $(X,Y)$ as a single joint categorical outcome
-$W = (X,Y)$ with $K = I \times J$ categories. The modelling strategy is based on
+$W = (X,Y)$ with $K = I \times J$ categories. The modeling strategy is based on
 baseline-category multinomial logits relative to the first cell.
 
 When controls are present, let $Z = (Z_1, \dots, Z_q)$ denote the control
@@ -494,7 +494,7 @@ correlation \citep{Linfoot1957}; related information measures for contingency
 tables were discussed by \citet{HamdanTsokos1971}. The same transformation is
 also the square root of a Cox--Snell likelihood-based coefficient of
 determination \citep{CoxSnell1989}, related to pseudo-$R^2$ measures used in
-discrete-choice and generalized linear modelling \citep{McFadden1974,
+discrete-choice and generalized linear modeling \citep{McFadden1974,
 Nagelkerke1991}. This mutual-information identity is specific to the
 unconditional table; once controls are introduced as regression covariates, the
 same likelihood-ratio logic remains, but there is no equally simple
@@ -546,14 +546,14 @@ R_{ij} = \frac{O_{ij} - \widehat{E}^{(0)}_{ij}}{\sqrt{\widehat{E}^{(0)}_{ij}}}.
 \end{equation*}
 The app computes both $D_{ij}$ and $R_{ij}$. In the displayed pair plot,
 the categorical pair plot prints the observed counts $O_{ij}$ inside each cell
-and uses $R_{ij}$ as the basis for the colour scale. Positive residuals are
-shown in red, negative residuals in blue, and darker colours indicate larger
+and uses $R_{ij}$ as the basis for the color scale. Positive residuals are
+shown in red, negative residuals in blue, and darker colors indicate larger
 standardized departures from the fitted null model. This choice separates the
 raw frequency information from the standardized model-based diagnostic.
 
 The categorical pair plot should therefore be read in two layers. The printed
 count tells the reader how many observations fall in a given cell, while the
-colour indicates whether that combination is over-represented or
+color indicates whether that combination is over-represented or
 under-represented relative to the fitted null model. A dark red cell means that
 the observed count is substantially larger than the fitted expectation, whereas
 a dark blue cell means that the combination occurs less often than expected.
@@ -564,7 +564,7 @@ reference model used to compute the expected counts. In the unconditional panel,
 ``Never''/``No'' is blue and ``Never''/``Yes'' is red, meaning that marginally
 there are fewer non-users with a father not born in the country and more
 non-users with a father born in the country than simple independence would
-predict. After adjustment for age, the same two cells reverse colour: the
+predict. After adjustment for age, the same two cells reverse color: the
 ``Never''/``No'' combination becomes over-represented and the ``Never''/``Yes''
 combination under-represented relative to conditional independence. A natural
 interpretation is that age was masking part of the association. Older
@@ -572,8 +572,8 @@ respondents are both less frequent internet users and more likely to report
 that their father was born in the country, which pushes the unconditional table
 toward the ``Never''/``Yes'' pattern. Once comparisons are made within age
 groups, a different residual structure becomes visible. More generally, this
-figure shows why the cell values and colours should be read together: the
-numbers tell how many observations are in each combination, while the colours
+figure shows why the cell values and colors should be read together: the
+numbers tell how many observations are in each combination, while the colors
 tell whether those counts are high or low relative to the fitted null model.
 When controls are added, the same reading applies, but the comparison is now
 made against conditional independence given the selected controls rather than
@@ -581,7 +581,7 @@ simple marginal independence.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.96\linewidth,height=0.24\textheight,keepaspectratio]{section3.3_unconditional_pairplot_netusoft_facntr}
+\includegraphics[width=0.96\linewidth,height=0.24\textheight,keepaspectratio]{section3.3_unconditional_pairplot_netusoft_facntr.jpg}
 \par\smallskip
 \small Unconditional pair plot.
 
@@ -593,7 +593,7 @@ simple marginal independence.
 \caption{\label{fig:catcatshots} Illustrative categorical--categorical pair
 plots from the 2011 Belgian ESS for frequency of internet use
 (\code{netusoft}) and father born in country (\code{facntr}). The cells print
-observed counts, while colour encodes the Pearson residual relative to the
+observed counts, while color encodes the Pearson residual relative to the
 fitted null model. The conditional panel adjusts for age of respondent
 (\code{agea}).}
 \end{figure}
@@ -652,7 +652,7 @@ converge to the same $\chi^2$ limit and differ only by higher-order terms.
 This score is therefore more suitable for display selection than cellwise
 likelihood-ratio terms because $R_{ij}^2$ is symmetric in over- and
 under-representation, remains informative for empty but unexpected cells, and
-aligns directly with the colour scale shown in the pair plot. If
+aligns directly with the color scale shown in the pair plot. If
 $m_r = \min(I,7)$ and $m_c = \min(J,7)$ denote the display limits, the app
 solves
 \begin{equation*}
@@ -734,8 +734,8 @@ by retaining only associations with $p$-values below 0.05. This unconditional
 view already yields a compact map of the dependence structure. Several links
 are visible, including an association between \code{health} and
 \code{netusoft}. At first sight this suggests that respondents who use the
-internet more frequently also tend to report better health. Figure
-\ref{fig:networkexample} shows the resulting network, while the pair plot in
+internet more frequently also tend to report better health.
+Figure~\ref{fig:networkexample} shows the resulting network, while the pair plot in
 Figure~\ref{fig:healthinternet} clarifies the direction of the
 relationship. Respondents who never use the internet are under-represented in
 the \emph{very good} health category and over-represented in the \emph{fair}
@@ -746,7 +746,7 @@ more frequent internet use is associated with better self-rated health.
 This pattern is substantively plausible, but it is also a natural candidate for
 confounding. The user may reasonably suspect that age plays an important role,
 since age is often related both to internet use and to health, as well as to
-other social behaviours recorded in the survey. In other words, age is a common
+other social behaviors recorded in the survey. In other words, age is a common
 background variable that may shape the entire dependence structure rather than a
 single pairwise association.
 
@@ -873,11 +873,11 @@ cells.
 
 The software is not intended to establish causal effects. Conditional
 associations depend on the selected controls and on the adequacy of the working
-models. Sparse categorical tables, rare categories, separation-like behaviour
+models. Sparse categorical tables, rare categories, separation-like behavior
 in multinomial fitting, and misspecified control effects may affect the
 reliability of both global and local summaries. The app should therefore be
 understood as a transparent exploratory layer that helps users decide where
-more formal modelling is warranted.
+more formal modeling is warranted.
 
 A more specific limitation concerns how variable types are detected.
 In the app, a variable is treated as numerical when
@@ -927,11 +927,6 @@ The screenshots included in this article were generated from the app as of
 
 \begin{thebibliography}{20}
 
-\bibitem[Agresti(2013)]{Agresti2013}
-Agresti A (2013).
-\newblock \emph{Categorical Data Analysis}.
-\newblock 3rd edition. Wiley, Hoboken.
-
 \bibitem[Adams et~al.(2021)]{AdamsEtAl2021}
 Adams JL, Deluca TF, Danforth CM, Dodds PS, Zheng Y, Anastasakis K, Choi B,
 Min A, Bessey MM (2021).
@@ -940,6 +935,11 @@ Network Graph.''
 \newblock arXiv:2106.05260.
 \newblock \url{https://arxiv.org/abs/2106.05260}.
 \newblock \doi{10.48550/arXiv.2106.05260}.
+
+\bibitem[Agresti(2013)]{Agresti2013}
+Agresti A (2013).
+\newblock \emph{Categorical Data Analysis}.
+\newblock 3rd edition. Wiley, Hoboken.
 
 \bibitem[Almende B.V. and Contributors and Thieurmel(2025)]{VisNetwork}
 Almende B.V. and Contributors, Thieurmel B (2025).
@@ -1195,13 +1195,13 @@ which is compared to an $F_{J-1,n-J}$ distribution.
 
 \subsection{Conditional case}
 
-With controls $Z = (Z_1, \dots, Z_q)$, the app uses an ANCOVA/extra-sum-of-
-squares construction. The full model is
+With controls $Z = (Z_1, \dots, Z_q)$, the app uses an
+ANCOVA/extra-sum-of-squares construction. The full model is
 \begin{equation}
 Y_t
 =
 \alpha
-+ \sum_{j=2}^{J} \beta_j 1\{X_t = j\}
++ \sum_{j=2}^{J} \beta_j \mathbf{1}\{X_t = j\}
 + \sum_{k=1}^{q} \gamma_k Z_{kt}
 + \varepsilon_t,
 \label{eq:app-full-ancova}
@@ -1429,7 +1429,7 @@ interaction block.
 
 Let $O_{ij}$ denote the observed cell count
 \begin{equation}
-O_{ij} = \sum_{t=1}^{n} 1\{X_t = i, Y_t = j\}.
+O_{ij} = \sum_{t=1}^{n} \mathbf{1}\{X_t = i, Y_t = j\}.
 \label{eq:app-oij}
 \end{equation}
 For both the unconditional and conditional modules, the expected count used by
@@ -1496,9 +1496,9 @@ principled display score even though the global test reported by the app is
 likelihood-ratio based.
 
 The app prints the observed counts $O_{ij}$ inside the displayed
-cells and uses $R_{ij}$ only for the colour scale. The observed-minus-expected
+cells and uses $R_{ij}$ only for the color scale. The observed-minus-expected
 deviations $D_{ij}$ are still computed internally, but the standardized
-residuals are preferred for colouring because they provide a comparable scale
+residuals are preferred for coloring because they provide a comparable scale
 across cells.
 
 In the implementation, both null and alternative models are estimated
@@ -1525,7 +1525,7 @@ remains visible after the full table has been trimmed to at most a $7 \times 7$
 display.
 
 The choice of $S_{ij} = R_{ij}^2$ is deliberate. Although the pair plot prints
-the observed counts $O_{ij}$ inside cells, it colours cells according to the sign
+the observed counts $O_{ij}$ inside cells, it colors cells according to the sign
 and magnitude of $R_{ij}$. Selecting rows and columns through $R_{ij}^2$
 therefore prioritizes the largest standardized departures regardless of sign.
 This is more appropriate for display than local likelihood-ratio terms such as
@@ -1536,9 +1536,9 @@ be shown visually, and $R_{ij}^2$ preserves that information whereas the local
 likelihood-ratio term does not.
 
 The app prints the observed counts $O_{ij}$ inside the displayed
-cells and uses $R_{ij}$ for the colour encoding. The observed-minus-expected
+cells and uses $R_{ij}$ for the color encoding. The observed-minus-expected
 deviations $D_{ij}$ are still computed internally, but the standardized
-residuals remain the most suitable quantity for colouring because they are
+residuals remain the most suitable quantity for coloring because they are
 comparable across cells.
 
 \end{appendix}
