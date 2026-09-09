@@ -250,27 +250,24 @@ r_{XY} =
 and filters the network on the corresponding $R^2 = r_{XY}^2$. The null
 hypothesis $H_0: r_{XY} = 0$ is tested against
 $H_1: r_{XY} \ne 0$ with the usual statistic
-\begin{equation}
+\begin{equation*}
 t = r_{XY}\sqrt{\frac{n-2}{1-r_{XY}^2}},
-\label{eq:t-pearson}
-\end{equation}
+\end{equation*}
 which is compared to a Student distribution with $n-2$ degrees of freedom.
 
 With controls $Z = (Z_1, \dots, Z_q)$, the app computes a partial correlation
 through the added-variable principle. Specifically, $X$ and $Y$ are separately
 regressed on $Z$ and the resulting residuals $\tilde{X}$ and $\tilde{Y}$ are
 correlated:
-\begin{equation}
+\begin{equation*}
 r_{XY\cdot Z} = \mathrm{cor}(\tilde{X}, \tilde{Y}).
-\label{eq:partial-r}
-\end{equation}
+\end{equation*}
 Again the network is filtered by the squared quantity $R^2_{XY\cdot Z}$.
 Under $H_0: r_{XY\cdot Z} = 0$, against
 $H_1: r_{XY\cdot Z} \ne 0$, the test statistic is
-\begin{equation}
+\begin{equation*}
 t = r_{XY\cdot Z}\sqrt{\frac{n-q-2}{1-r_{XY\cdot Z}^2}},
-\label{eq:t-partial}
-\end{equation}
+\end{equation*}
 with $n-q-2$ degrees of freedom.
 
 The associated pair plots are designed to keep the interpretation stable across
@@ -312,56 +309,49 @@ association after adjusting for age of respondent (\code{agea}).}
 
 Let $Y$ be numerical and let $X$ be categorical with $J$ groups. In the
 unconditional case, the software uses the classical ANOVA effect size
-\begin{equation}
+\begin{equation*}
 \eta^2 = \frac{\mathrm{SSB}}{\mathrm{SST}},
-\label{eq:eta2}
-\end{equation}
+\end{equation*}
 where $\mathrm{SSB}$ is the between-group sum of squares and $\mathrm{SST}$ is
 the total sum of squares. The null hypothesis of equal group means is tested by
 the usual ANOVA statistic
-\begin{equation}
+\begin{equation*}
 F = \frac{\mathrm{SSB}/(J-1)}{\mathrm{SSW}/(n-J)},
-\label{eq:f-anova}
-\end{equation}
+\end{equation*}
 with $\mathrm{SSW}$ denoting the within-group sum of squares.
 
 With controls, the app uses an ANCOVA/extra-sum-of-squares construction. A
 reduced model
-\begin{equation}
+\begin{equation*}
 Y_t = \alpha' + \sum_{k=1}^{q}\gamma'_k Z_{kt} + \varepsilon'_t
-\label{eq:red-model}
-\end{equation}
+\end{equation*}
 is compared to a full model
-\begin{equation}
+\begin{equation*}
 Y_t = \alpha + \sum_{j=2}^{J}\beta_j \mathbf{1}\{X_t = j\}
       + \sum_{k=1}^{q}\gamma_k Z_{kt} + \varepsilon_t.
-\label{eq:full-model}
-\end{equation}
+\end{equation*}
 If $\mathrm{RSS}_{red}$ and $\mathrm{RSS}_{full}$ are the residual sums of
 squares, the software reports
-\begin{equation}
+\begin{equation*}
 \eta^2_{X\mid Z} =
 \frac{\mathrm{RSS}_{red} - \mathrm{RSS}_{full}}
      {(\mathrm{RSS}_{red} - \mathrm{RSS}_{full}) + \mathrm{RSS}_{full}},
-\label{eq:partial-eta}
-\end{equation}
+\end{equation*}
 which is equivalent to the proportion of the residual variation left after
 adjusting for $Z$ that is further explained by the group structure induced by
 $X$. The corresponding $F$-test is
-\begin{equation}
+\begin{equation*}
 F =
 \frac{(\mathrm{RSS}_{red} - \mathrm{RSS}_{full})/(J-1)}
      {\mathrm{RSS}_{full}/\mathrm{df}_{full}}.
-\label{eq:f-ancova}
-\end{equation}
+\end{equation*}
 
 The pair plots again follow a common logic. Without controls, the local display
 is a group-means plot of the raw outcome. With controls, the software first
 fits $Y$ on $Z$, extracts residuals
-\begin{equation}
+\begin{equation*}
 \tilde{Y}_t = Y_t - \widehat{E}(Y_t \mid Z_t),
-\label{eq:yresid}
-\end{equation}
+\end{equation*}
 and then plots the group means of $\tilde{Y}$ across the categories of $X$.
 These residualized means show the remaining group differences after removing
 the linear contribution of the controls. Explicit computational formulas,
@@ -424,19 +414,17 @@ baseline-category multinomial logits relative to the first cell.
 When controls are present, let $Z = (Z_1, \dots, Z_q)$ denote the control
 vector after model-matrix coding of categorical controls. Under the null model
 of conditional independence, the linear predictor for cell $(i,j)$ is
-\begin{equation}
+\begin{equation*}
 \eta^{(0)}_{ij}(z)
 =
 \alpha_i + \beta_j + \lambda_i^\top z + \kappa_j^\top z,
-\label{eq:eta0}
-\end{equation}
+\end{equation*}
 whereas the alternative model adds an interaction term:
-\begin{equation}
+\begin{equation*}
 \eta^{(1)}_{ij}(z)
 =
 \alpha_i + \beta_j + \lambda_i^\top z + \kappa_j^\top z + \gamma_{ij}.
-\label{eq:eta1}
-\end{equation}
+\end{equation*}
 The unconditional case is obtained by dropping the $z$-dependent terms.
 
 The terms in these predictors have a direct interpretation. The parameters
@@ -456,7 +444,7 @@ numerical--categorical pair plots.
 
 The implementation uses reference-category constraints. If the first level of
 $X$ and the first level of $Y$ are taken as baseline categories, then
-\begin{equation}
+\begin{equation*}
 \alpha_1 = \beta_1 = 0,
 \qquad
 \lambda_1 = \mathbf{0},
@@ -464,16 +452,14 @@ $X$ and the first level of $Y$ are taken as baseline categories, then
 \kappa_1 = \mathbf{0},
 \qquad
 \gamma_{1j} = \gamma_{i1} = 0.
-\label{eq:constraints}
-\end{equation}
+\end{equation*}
 The corresponding probabilities are
-\begin{equation}
+\begin{equation*}
 \pi^{(m)}_{ij}(z;\theta) =
 \frac{\exp(\eta^{(m)}_{ij}(z))}
 {\sum_{r=1}^{I}\sum_{s=1}^{J}\exp(\eta^{(m)}_{rs}(z))},
 \qquad m \in \{0,1\},
-\label{eq:pi}
-\end{equation}
+\end{equation*}
 with the baseline cell receiving linear predictor zero.
 
 For $m \in \{0,1\}$, the observation-level log-likelihood is
@@ -488,22 +474,19 @@ Let $\widehat{\theta}_0$ and $\widehat{\theta}_1$ denote the maximizers of
 $\ell_0$ and $\ell_1$, and write $\ell_0 = \ell_0(\widehat{\theta}_0)$ and
 $\ell_1 = \ell_1(\widehat{\theta}_1)$. The unconditional likelihood-ratio
 deviance is
-\begin{equation}
+\begin{equation*}
 G^2 = 2(\ell_1 - \ell_0),
-\label{eq:g2}
-\end{equation}
+\end{equation*}
 which the app transforms into the bounded association measure
-\begin{equation}
+\begin{equation*}
 V_L = \sqrt{1 - \exp(-G^2/n)}.
-\label{eq:vl}
-\end{equation}
+\end{equation*}
 With controls, the same construction is applied to the nested conditional
 multinomial models; if $G^2_{\mid Z}$ denotes the likelihood-ratio deviance
 for that conditional comparison, the app reports
-\begin{equation}
+\begin{equation*}
 V_{L\mid Z} = \sqrt{1 - \exp(-G^2_{\mid Z}/n)}.
-\label{eq:vlz}
-\end{equation}
+\end{equation*}
 In the unconditional contingency-table case, $G^2/n$ is twice the empirical
 mutual information between $X$ and $Y$ when natural logarithms are used.
 Hence, $V_L$ is the sample analogue of Linfoot's informational coefficient of
@@ -519,10 +502,9 @@ contingency-table formula.
 
 Under regularity conditions, the associated significance test compares $G^2$
 or $G^2_{\mid Z}$ to a $\chi^2$ distribution with
-\begin{equation}
+\begin{equation*}
 \mathrm{df} = (I-1)(J-1),
-\label{eq:df}
-\end{equation}
+\end{equation*}
 that is, the number of free interaction parameters.
 
 The fitted null model also yields expected counts
@@ -551,20 +533,17 @@ covariates.
 \paragraph{Local diagnostics and pair plots.}
 
 Local interpretation for categorical pairs is based on observed counts
-\begin{equation}
+\begin{equation*}
 O_{ij} = \sum_{t=1}^{n}\mathbf{1}\{X_t=i, Y_t=j\},
-\label{eq:oij}
-\end{equation}
+\end{equation*}
 the observed-minus-expected deviation
-\begin{equation}
+\begin{equation*}
 D_{ij} = O_{ij} - \widehat{E}^{(0)}_{ij},
-\label{eq:dij}
-\end{equation}
+\end{equation*}
 and the Pearson residual
-\begin{equation}
+\begin{equation*}
 R_{ij} = \frac{O_{ij} - \widehat{E}^{(0)}_{ij}}{\sqrt{\widehat{E}^{(0)}_{ij}}}.
-\label{eq:rij}
-\end{equation}
+\end{equation*}
 The app computes both $D_{ij}$ and $R_{ij}$. In the displayed pair plot,
 the categorical pair plot prints the observed counts $O_{ij}$ inside each cell
 and uses $R_{ij}$ as the basis for the colour scale. Positive residuals are
@@ -676,25 +655,21 @@ under-representation, remains informative for empty but unexpected cells, and
 aligns directly with the colour scale shown in the pair plot. If
 $m_r = \min(I,7)$ and $m_c = \min(J,7)$ denote the display limits, the app
 solves
-\begin{equation}
+\begin{equation*}
 \max_{u,v,z}\sum_{i=1}^{I}\sum_{j=1}^{J} S_{ij} z_{ij}
-\label{eq:subobjective}
-\end{equation}
+\end{equation*}
 subject to
-\begin{align}
+\begin{align*}
 \sum_{i=1}^{I} u_i &= m_r,
 &
 \sum_{j=1}^{J} v_j &= m_c,
-\label{eq:subcons1}
 \\
 z_{ij} &\le u_i,
 &
 z_{ij} &\le v_j,
-\label{eq:subcons2}
 \\
 z_{ij} &\ge u_i + v_j - 1.
-\label{eq:subcons3}
-\end{align}
+\end{align*}
 Here $u_i$ and $v_j$ indicate selected rows and columns, while $z_{ij}$
 indicates whether cell $(i,j)$ belongs to the displayed submatrix. The exact
 optimization is carried out with \pkg{lpSolve} \citep{lpSolve} when available
