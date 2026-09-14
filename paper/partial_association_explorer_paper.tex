@@ -16,7 +16,7 @@
 \newcommand{\pkg}[1]{\textsf{#1}}
 \newcommand{\proglang}[1]{\textsf{#1}}
 \newcommand{\email}[1]{\href{mailto:#1}{#1}}
-\newcommand{\doi}[1]{\href{https://doi.org/#1}{doi:#1}}
+\newcommand{\doi}[1]{\href{https://doi.org/#1}{https://doi.org/#1}}
 
 \author{
   Thadd\'ee D'haegeleer\textsuperscript{a},
@@ -27,7 +27,7 @@
   \normalsize Corresponding author: \email{thaddee.dhaegeleer@uclouvain.be}
 }
 
-\title{\appname: Interactive Profiling of Marginal and Conditional Associations in Mixed-Type Data}
+\title{\appname: Comparing Marginal and Conditional Dependence Structures in Mixed Social-Science Data}
 \date{}
 
 \begin{document}
@@ -36,113 +36,115 @@
 
 \begin{abstract}
   \appname{} is an open-source \proglang{R} \citep{R} \pkg{shiny}
-  \citep{Shiny} application for exploratory association analysis in datasets
-  containing both numerical and categorical variables. The software computes a
-  global association measure, a formal significance test, and a local pairwise
-  diagnostic for every selected variable pair. Three pair types are handled in
-  a unified workflow: numerical--numerical, numerical--categorical, and
-  categorical--categorical. A central feature of the application is the
-  possibility of selecting control variables and recomputing the full
-  association structure conditionally, allowing users to distinguish marginal
-  relationships from associations that remain after adjustment, disappear as
-  likely spurious links, or emerge only once a masking background variable has
-  been taken into account. The interface combines filtered association
-  networks, harmonized pair plots, exportable summaries, and likelihood-based
-  diagnostics for categorical pairs. This article describes the statistical
-  framework implemented in the software, the main design and optimization
-  choices underlying the app, and an illustrative analysis workflow
-  based on survey data.
+  \citep{Shiny} application for exploratory association analysis in mixed-type
+  social-science datasets. Many applied researchers work with data combining
+  survey items, socio-demographic variables, behavioral indicators, and
+  plausible confounders. Standard correlation matrices are limited to
+  numerical variables, while marginal association summaries can be misleading
+  when variables are jointly related to background factors such as age,
+  education, or region. \appname{} addresses this problem by computing
+  pairwise association measures, significance tests, and local pair diagnostics
+  for numerical--numerical, numerical--categorical, and
+  categorical--categorical variable pairs. Its central feature is the
+  comparison of unconditional and conditional association networks: users can
+  add control variables and immediately identify associations that persist
+  after adjustment, disappear as likely confounded links, or emerge only once a
+  masking variable is accounted for. The application combines filtered
+  interactive networks, pair plots adapted to each variable type, exportable
+  summaries, and likelihood-based diagnostics for categorical pairs. We
+  describe the statistical framework implemented in the software and illustrate
+  the workflow using Belgian data from the European Social Survey.
 \end{abstract}
 
-\noindent\textbf{Keywords:} \proglang{R}, \pkg{shiny}, exploratory data analysis, mixed-type data, conditional association, likelihood-ratio tests, association network.
+\noindent\textbf{Keywords:} \proglang{R}, \pkg{shiny}, exploratory data analysis, mixed-type data, conditional association, association networks, survey data, confounding.
 
 \bigskip
 
-\section[Introduction: Association profiling in R]{Introduction: Association profiling in \proglang{R}}
+\section{Introduction}
 \label{sec:intro}
 
-Exploratory analysis often begins with a simple question: which variables in a
-dataset are associated? In practice, this question becomes substantially harder
-when the data mix numerical and categorical variables and when plausible
-confounders should be taken into account. Classical correlation matrices cover
-only numerical variables, while standard contingency-table summaries do not
-provide a unified treatment of mixed pair types. Even when pairwise summaries
-exist, marginal associations can be misleading if two variables are jointly
-related to age, education, region, time, or another background factor.
+Exploratory social-science analysis often begins before a formal model has
+been specified. Researchers may have a dataset containing survey items,
+socio-demographic indicators, behavioral measures, institutional variables,
+and several plausible confounders. A first question is then simple to formulate
+but difficult to answer in practice: which variables appear to be associated,
+and which of these associations remain after adjusting for relevant background
+factors?
 
-\appname{} addresses this problem as a software workflow rather than as a
-single statistical test. It provides a guided interface for computing and
-visualizing both \emph{global} and \emph{local} associations between all
-selected pairs of variables. Global association is the single strength measure
-used to draw and filter the network, while a companion significance test
-provides a $p$-value for the corresponding null hypothesis. Local association
-is the observation-, group-, or cell-level diagnostic shown in the pair plots.
-The same application handles the unconditional case and the conditional case,
-where users select control variables $Z$ before recomputing the association
-network. Importantly, the interface keeps the same logic across pair types: one
-global measure for filtering, one formal test for significance, and one local
-plot explaining the edge, whether the user is looking at the raw structure or
-at the adjusted one.
+This question is complicated by two features of many social-science datasets.
+First, variables are often mixed-type. A single dataset may contain numerical
+variables such as age or income, ordinal survey items, binary indicators, and
+multi-category factors. Classical correlation matrices provide a compact view
+only for numerical variables, while contingency-table summaries do not extend
+naturally to all mixed pair types. Second, marginal associations can be
+misleading. A relationship visible in the raw data may disappear after
+controlling for age, education, region, or another background factor.
+Conversely, a relationship that is weak or invisible marginally may become
+clearer once a masking variable is held fixed.
+
+\appname{} addresses this problem as a computational workflow. The app
+computes association measures and significance tests for every selected pair of
+variables, displays retained associations as an interactive network, and
+provides local pair plots that explain each edge. Its distinctive feature is
+the direct comparison between unconditional and conditional association
+structures. Users can first inspect the marginal network, then add one or
+several controls and immediately see which edges remain, disappear, or newly
+appear after adjustment.
+
+This comparison matters for applied work. Without it, exploratory analysis can
+easily turn descriptive associations into substantive narratives too quickly.
+For example, a visible link between two survey responses may reflect the age
+composition of the sample rather than a direct substantive relation between the
+responses themselves. In other cases, the raw table or scatter plot may hide a
+relationship because two age, education, or region gradients offset each other.
+\appname{} makes this adjustment step visible and reproducible: the user can
+compare two network views and then inspect the pair plots behind the changing
+edges.
 
 The application builds on \pkg{AssociationExplorer}
 \citep{SoeteweyHeuchenneClaesDescampe2026}, which showed how an accessible
 \pkg{shiny} interface can lower the barrier to marginal association exploration
-in mixed-type data. \appname{} extends that workflow in three main directions.
-First, it adds conditional association analysis through a common control-variable
-interface applied across all pair types. Second, it performs a formal test of
-association for every selected pair rather than reporting effect sizes alone.
-Third, it expands the local visual diagnostics, especially for
-categorical--categorical pairs, where the software relies on likelihood-based
-global measures and residual-based local displays.
-
-The intended audience is broader than a purely methodological readership. In
-social-science and economic applications, users often begin with a long list of
-survey items, behavioral indicators, institutional variables, and demographic
-controls, and the first challenge is to understand which relationships deserve
-closer study. \appname{} is useful precisely because it helps users move beyond
-raw pairwise description. An unconditional screening can be followed by the
-same analysis with controls to determine whether an edge remains, disappears as
-a likely confounded association, or becomes visible only after adjustment
-because a background variable was masking it. In that sense, the application is
-not only a visualization layer but a practical exploratory tool for separating
-descriptively visible, spurious, and hidden associations in mixed-type data.
-This unconditional--conditional comparison is especially valuable for applied
-users because it turns a potentially technical adjustment exercise into a
-transparent, clickable comparison of two network views and their corresponding
-pair plots.
+in mixed-type data. \appname{} extends that workflow by adding conditional or
+partial association analysis through a common control-variable interface,
+formal significance tests for every selected pair, likelihood-based
+categorical--categorical association measures, enhanced local pair plots, and
+exportable association summaries.
 
 From a statistical perspective, the three pair types are handled by matched
 global measures and tests: Pearson's $r$ and partial $r$ for
 numerical--numerical pairs, $\eta^2$ and partial $\eta^2$ for
 numerical--categorical pairs, and likelihood-ratio-based coefficients $V_L$
-and $V_{L\mid Z}$ for categorical--categorical pairs. All measures are
-described in Section~\ref{sec:framework}, and additional computational details
-are collected in the Appendix.
+and $V_{L\mid Z}$ for categorical--categorical pairs. These measures are not
+presented as interchangeable quantities. Rather, they provide pair-type
+specific summaries that support a common exploratory workflow. The statistical
+framework is described in Section~\ref{sec:framework}, and additional
+computational details are collected in the Appendix.
 
 All screenshots and illustrative examples in the article use the Belgian data
 from the 2011 European Social Survey (ESS). The ESS is a cross-national survey
-covering social attitudes, behaviors, and socio-demographic characteristics;
-the Belgian extract is useful here because it combines numerical variables,
+covering social attitudes, behaviors, and socio-demographic characteristics.
+The Belgian extract is useful here because it combines numerical variables,
 categorical survey items, and plausible background controls such as age.
 
 The remainder of the article is organized as follows. Section~\ref{sec:overview}
 describes the software workflow and outputs. Section~\ref{sec:framework}
 presents the implemented statistical framework for all pair types.
 Section~\ref{sec:implementation} details the most important implementation and
-optimization choices in the app. Section~\ref{sec:example} gives an
-illustrative workflow showing how the software can both remove a confounded
-association and reveal a hidden one. Section~\ref{sec:related} situates the app
-relative to related software, and Section~\ref{sec:discussion} concludes with
-strengths, limitations, and possible extensions. Additional mathematical
-details are collected in the Appendix.
+interface choices in the app. Section~\ref{sec:example} gives an illustrative
+workflow showing how the software can both remove a confounded association and
+reveal a hidden one. Section~\ref{sec:related} situates the app relative to
+related software, and Section~\ref{sec:discussion} concludes with strengths,
+limitations, and possible extensions. Additional mathematical details are
+collected in the Appendix.
 
-\section{Software overview and workflow}
+\section{Software workflow and outputs}
 \label{sec:overview}
 
 \appname{} is a standalone \pkg{shiny} application distributed through a public
-GitHub repository. Users upload a \code{.csv}, \code{.xls}, or \code{.xlsx}
-file and may optionally upload a two-column variable-description file. The
-software then:
+GitHub repository. The interface is organized around a complete exploratory
+sequence rather than a single model-fitting command. Users upload a
+\code{.csv}, \code{.xls}, or \code{.xlsx} file and may optionally upload a
+two-column variable-description file. The software then:
 
 \begin{enumerate}
   \item removes variables whose non-missing values take only a single distinct
@@ -162,14 +164,17 @@ variables are used for adjustment but do not appear as nodes. Thresholds are
 applied after all pairwise quantities have been computed: the user can filter
 numerical--numerical and numerical--categorical edges by a range for $R^2$ or
 $\eta^2$, categorical--categorical edges by a range for $V_L$, and all edges
-by a range of $p$-values. When controls are selected, the app can also display
-the conditional network together with a visual comparison to the corresponding
-unconditional view. The user can switch the displayed network from the
-unconditional structure to the conditional one and back again. In that
-comparison mode, the edge colors are interpreted relative to the specific view
-that is currently shown: green edges are present only in the displayed view,
-whereas muted gray dotted edges belong only to the alternative view and are
-shown for comparison.
+by a range of $p$-values. Thus the app is not simply computing a matrix of
+association measures. It structures an exploratory workflow from variable
+selection to network-level comparison and edge-level interpretation.
+
+When controls are selected, the app can display the conditional network
+together with a visual comparison to the corresponding unconditional view. The
+user can switch the displayed network from the unconditional structure to the
+conditional one and back again. In that comparison mode, the edge colors are
+interpreted relative to the specific view that is currently shown: green edges
+are present only in the displayed view, whereas muted gray dotted edges belong
+only to the alternative view and are shown for comparison.
 
 The core workflow is summarized in Table~\ref{tab:measures}. The software uses
 different statistical models depending on the pair type, but the outputs are
@@ -178,9 +183,9 @@ formal test, and one local plot adapted to the data type.
 
 \begin{figure}[H]
 \centering
-\begin{minipage}[c][0.275\textheight][c]{0.78\linewidth}
+\begin{minipage}[c]{0.78\linewidth}
 \centering
-\includegraphics[width=\linewidth,height=0.265\textheight,trim=0 323 0 0,clip,keepaspectratio]{section2_variable_selection.jpg}
+\includegraphics[width=\linewidth,keepaspectratio]{section2_variable_selection.jpg}
 \end{minipage}
 \par\smallskip
 \small Variable and control selection.
@@ -487,18 +492,22 @@ for that conditional comparison, the app reports
 \begin{equation*}
 V_{L\mid Z} = \sqrt{1 - \exp(-G^2_{\mid Z}/n)}.
 \end{equation*}
-In the unconditional contingency-table case, $G^2/n$ is twice the empirical
-mutual information between $X$ and $Y$ when natural logarithms are used.
-Hence, $V_L$ is the sample analogue of Linfoot's informational coefficient of
-correlation \citep{Linfoot1957}; related information measures for contingency
-tables were discussed by \citet{HamdanTsokos1971}. The same transformation is
-also the square root of a Cox--Snell likelihood-based coefficient of
-determination \citep{CoxSnell1989}, related to pseudo-$R^2$ measures used in
-discrete-choice and generalized linear modeling \citep{McFadden1974,
-Nagelkerke1991}. This mutual-information identity is specific to the
-unconditional table; once controls are introduced as regression covariates, the
-same likelihood-ratio logic remains, but there is no equally simple
-contingency-table formula.
+In the unconditional contingency-table case, where the alternative model is the
+unrestricted joint distribution and the null model is independence, $G^2/n$ is
+twice the plug-in empirical mutual information between $X$ and $Y$ when natural
+logarithms are used. Consequently,
+\[
+V_L = \sqrt{1-\exp[-2\widehat I(X;Y)]},
+\]
+which is the plug-in sample analogue of Linfoot's informational coefficient of
+correlation \citep{Linfoot1957}. Equivalently,
+$V_L^2 = 1 - (L_0/L_1)^{2/n}$, so the squared measure has the Cox--Snell
+likelihood-ratio pseudo-$R^2$ form \citep{CoxSnell1989}, with the independence
+model as the null model and the association model as the alternative. The
+mutual-information identity is specific to the unconditional table; once
+controls are introduced as regression covariates, the same likelihood-ratio
+logic remains, but there is no equally simple contingency-table
+mutual-information formula.
 
 Under regularity conditions, the associated significance test compares $G^2$
 or $G^2_{\mid Z}$ to a $\chi^2$ distribution with
@@ -523,7 +532,7 @@ Appendix~\ref{app:catcat}.
 
 This design was chosen after considering Poisson log-linear alternatives.
 Log-linear models are elegant and standard for contingency tables
-\citep{Agresti2013, NelderWedderburn1972}. However, in an interactive app with
+\citep{Agresti2013}. However, in an interactive app with
 potentially many or continuous controls, multiway-table approaches become
 fragile because continuous covariates must be discretized and sparse tables
 arise quickly. The structured multinomial approach keeps the likelihood-ratio
@@ -598,12 +607,13 @@ fitted null model. The conditional panel adjusts for age of respondent
 (\code{agea}).}
 \end{figure}
 
-\section{Implementation details}
+\section{Implementation and interface choices}
 \label{sec:implementation}
 
-The app is not merely a front-end around naive
-repeated estimation. Several design choices in the implementation materially
-improve responsiveness, especially for the categorical--categorical module.
+The app is not merely a front-end around naive repeated estimation. Several
+design choices in the implementation improve responsiveness and make the
+unconditional--conditional comparison usable in an interactive setting,
+especially for the categorical--categorical module.
 
 First, the app builds a prepared problem object for each categorical pair. This
 object stores the cleaned factor levels, the joint outcome mapping, the
@@ -684,20 +694,23 @@ Finally, the interface is designed to support comparison rather than only
 inspection. When controls are selected, the network view can be switched
 between conditional and unconditional structures, and the pair-plot section can
 show the unconditional comparison below the conditional plot for the same pair.
-This makes it easier to understand not only whether an association is retained,
-but also how the local structure changes after adjustment.
+This design choice is central to the app's social-science use case: it makes it
+easier to understand not only whether an association is retained, but also how
+the local structure changes after adjustment.
 
 \section{Illustrative analysis workflow}
 \label{sec:example}
 
-To illustrate the workflow, consider a Belgian extract of the European Social
-Survey and suppose a user wants to identify the dependence structure linking
-five variables: frequency of internet use (\code{netusoft}), self-rated health
-(\code{health}), frequency of alcohol consumption (\code{alcfreq}), frequency
-of social meetings (\code{sclmeet}), and vaccination status (\code{vacc19}).
-The aim is not to test one pre-specified hypothesis, but to obtain an
-interpretable overview of how these variables are related to one another within
-a common association network.
+This section illustrates the app as an exploratory reasoning tool rather than
+as a procedure for establishing causal effects. Consider a Belgian extract of
+the European Social Survey and suppose a user wants to identify the dependence
+structure linking five variables: frequency of internet use (\code{netusoft}),
+self-rated health (\code{health}), frequency of alcohol consumption
+(\code{alcfreq}), frequency of social meetings (\code{sclmeet}), and
+vaccination status (\code{vacc19}). The aim is not to test one pre-specified
+hypothesis, but to obtain an interpretable overview of how these variables are
+related to one another within a common association network and how that network
+changes once a plausible background factor is introduced.
 
 \begin{figure}[H]
 \centering
@@ -809,10 +822,13 @@ This example captures the intended use of \appname{}. A user begins by mapping
 the unconditional dependence structure among a set of variables, then asks
 whether a plausible background variable such as age may be shaping the observed
 pattern. By introducing age as a control, the software turns a descriptive
-network into a more informative analysis of confounding: one edge
-(\code{netusoft}--\code{health}) disappears because it was largely compositional,
-while another (\code{sclmeet}--\code{vacc19}) becomes visible only after
-adjustment.
+network into a more informative exploratory comparison: one edge
+(\code{netusoft}--\code{health}) disappears because it was largely
+compositional, while another (\code{sclmeet}--\code{vacc19}) becomes visible
+only after adjustment. The substantive value of the app is precisely this
+side-by-side distinction between associations that are visible marginally,
+associations that appear robust to adjustment, and associations that are hidden
+until a masking variable is taken into account.
 
 \section{Related software}
 \label{sec:related}
@@ -824,6 +840,14 @@ basic idea of exploring associations through a network and pairwise plots in a
 variables, the computation of formal tests for every selected pair, the
 likelihood-based treatment of categorical--categorical associations, and the
 expanded local diagnostics.
+
+The relevant comparison is not only whether a program can compute an
+association coefficient. For the purposes of exploratory social-science
+analysis, five dimensions matter jointly: whether the software handles mixed
+variable types, whether it offers a network-level view, whether formal tests
+are attached to the displayed edges, whether users can introduce controls
+across all pair types, and whether the local structure behind each edge can be
+inspected. \appname{} is designed around the intersection of these dimensions.
 
 \pkg{Sirius} is another relevant comparison: a Python and Django application
 for exploratory visualization of mixed data based on mutual information
@@ -850,9 +874,12 @@ types are treated jointly, the network is filtered using a common visual
 grammar, and optional controls can be applied consistently across the full set
 of pairs.
 
-The app should therefore be understood less as a competitor
-to any single-purpose package and more as a unifying exploratory layer that
-connects several standard statistical ideas within one workflow.
+The app should therefore be understood less as a competitor to any
+single-purpose package and more as a unifying exploratory layer that connects
+several standard statistical ideas within one workflow. Its distinctive
+contribution is the direct comparison of marginal and adjusted association
+structures in a setting where variables may be numerical, categorical, or a
+mixture of both.
 
 \section{Discussion}
 \label{sec:discussion}
@@ -926,141 +953,103 @@ The screenshots included in this article were generated from the app as of
 2026-07-10.
 
 \begin{thebibliography}{20}
+\setlength{\itemsep}{0.5\baselineskip}
 
 \bibitem[Adams et~al.(2021)]{AdamsEtAl2021}
-Adams JL, Deluca TF, Danforth CM, Dodds PS, Zheng Y, Anastasakis K, Choi B,
-Min A, Bessey MM (2021).
-\newblock ``Sirius: Visualization of Mixed Features as a Mutual Information
-Network Graph.''
-\newblock arXiv:2106.05260.
-\newblock \url{https://arxiv.org/abs/2106.05260}.
-\newblock \doi{10.48550/arXiv.2106.05260}.
+Adams, J. L., Deluca, T. F., Danforth, C. M., Dodds, P. S., Zheng, Y.,
+Anastasakis, K., Choi, B., Min, A., \& Bessey, M. M. (2021).
+\newblock Sirius: Visualization of mixed features as a mutual information
+network graph.
+\newblock \emph{arXiv}. \doi{10.48550/arXiv.2106.05260}
 
 \bibitem[Agresti(2013)]{Agresti2013}
-Agresti A (2013).
-\newblock \emph{Categorical Data Analysis}.
-\newblock 3rd edition. Wiley, Hoboken.
+Agresti, A. (2013).
+\newblock \emph{Categorical data analysis} (3rd ed.).
+\newblock Wiley.
 
-\bibitem[Almende B.V. and Contributors and Thieurmel(2025)]{VisNetwork}
-Almende B.V. and Contributors, Thieurmel B (2025).
-\newblock \emph{\pkg{visNetwork}: Network Visualization using `vis.js' Library}.
-\newblock \proglang{R} package version 2.1.4,
-\url{https://CRAN.R-project.org/package=visNetwork}.
-\newblock \doi{10.32614/CRAN.package.visNetwork}.
+\bibitem[Almende B.V. et~al.(2025)]{VisNetwork}
+Almende B.V., Contributors, \& Thieurmel, B. (2025).
+\newblock \emph{\pkg{visNetwork}: Network visualization using the \code{vis.js}
+library} (Version 2.1.4) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.visNetwork}
 
 \bibitem[Attali(2021)]{shinyjs}
-Attali D (2021).
-\newblock \emph{\pkg{shinyjs}: Easily Improve the User Experience of Your Shiny Apps in Seconds}.
-\newblock \proglang{R} package version 2.1.0,
-\url{https://CRAN.R-project.org/package=shinyjs}.
-\newblock \doi{10.32614/CRAN.package.shinyjs}.
+Attali, D. (2021).
+\newblock \emph{\pkg{shinyjs}: Easily improve the user experience of your
+\pkg{shiny} apps in seconds} (Version 2.1.0) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.shinyjs}
 
 \bibitem[Berkelaar(2024)]{lpSolve}
-Berkelaar M (2024).
-\newblock \emph{\pkg{lpSolve}: Interface to Lp\_solve v. 5.5 to Solve Linear/Integer Programs}.
-\newblock \proglang{R} package version 5.6.23,
-\url{https://CRAN.R-project.org/package=lpSolve}.
-\newblock \doi{10.32614/CRAN.package.lpSolve}.
+Berkelaar, M. (2024).
+\newblock \emph{\pkg{lpSolve}: Interface to \code{lp\_solve} v. 5.5 to solve
+linear/integer programs} (Version 5.6.23) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.lpSolve}
 
 \bibitem[Chang et~al.(2025)]{Shiny}
-Chang W, Cheng J, Allaire J, Sievert C, Schloerke B, Xie Y, Allen J,
-McPherson J, Dipert A, Borges B (2025).
-\newblock \emph{\pkg{shiny}: Web Application Framework for \proglang{R}}.
-\newblock \proglang{R} package version 1.11.1,
-\url{https://CRAN.R-project.org/package=shiny}.
-\newblock \doi{10.32614/CRAN.package.shiny}.
+Chang, W., Cheng, J., Allaire, J. J., Sievert, C., Schloerke, B., Xie, Y.,
+Allen, J., McPherson, J., Dipert, A., \& Borges, B. (2025).
+\newblock \emph{\pkg{shiny}: Web application framework for \proglang{R}}
+(Version 1.11.1) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.shiny}
 
-\bibitem[Cox and Snell(1989)]{CoxSnell1989}
-Cox DR, Snell EJ (1989).
-\newblock \emph{Analysis of Binary Data}.
-\newblock 2nd edition. Chapman and Hall, London.
+\bibitem[Cox \& Snell(1989)]{CoxSnell1989}
+Cox, D. R., \& Snell, E. J. (1989).
+\newblock \emph{Analysis of binary data} (2nd ed.).
+\newblock Chapman and Hall.
 
 \bibitem[Firke(2024)]{janitor}
-Firke S (2024).
-\newblock \emph{\pkg{janitor}: Simple Tools for Examining and Cleaning Dirty Data}.
-\newblock \proglang{R} package version 2.2.1,
-\url{https://CRAN.R-project.org/package=janitor}.
-\newblock \doi{10.32614/CRAN.package.janitor}.
-
-\bibitem[Hamdan and Tsokos(1971)]{HamdanTsokos1971}
-Hamdan MA, Tsokos CP (1971).
-\newblock ``An Information Measure of Association in Contingency Tables.''
-\newblock \emph{Information and Control}, \textbf{19}(2), 174--179.
-\newblock \doi{10.1016/S0019-9958(71)90799-6}.
+Firke, S. (2024).
+\newblock \emph{\pkg{janitor}: Simple tools for examining and cleaning dirty
+data} (Version 2.2.1) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.janitor}
 
 \bibitem[Lin(2023)]{reactable}
-Lin G (2023).
-\newblock \emph{\pkg{reactable}: Interactive Data Tables for \proglang{R}}.
-\newblock \proglang{R} package version 0.4.4,
-\url{https://CRAN.R-project.org/package=reactable}.
-\newblock \doi{10.32614/CRAN.package.reactable}.
+Lin, G. (2023).
+\newblock \emph{\pkg{reactable}: Interactive data tables for \proglang{R}}
+(Version 0.4.4) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.reactable}
 
 \bibitem[Linfoot(1957)]{Linfoot1957}
-Linfoot EH (1957).
-\newblock ``An Informational Measure of Correlation.''
-\newblock \emph{Information and Control}, \textbf{1}(1), 85--89.
-\newblock \doi{10.1016/S0019-9958(57)90116-X}.
-
-\bibitem[McFadden(1974)]{McFadden1974}
-McFadden D (1974).
-\newblock ``Conditional Logit Analysis of Qualitative Choice Behavior.''
-\newblock In P Zarembka (ed.), \emph{Frontiers in Econometrics}, pp. 105--142.
-Academic Press, New York.
-
-\bibitem[Nagelkerke(1991)]{Nagelkerke1991}
-Nagelkerke NJD (1991).
-\newblock ``A Note on a General Definition of the Coefficient of Determination.''
-\newblock \emph{Biometrika}, \textbf{78}(3), 691--692.
-\newblock \doi{10.1093/biomet/78.3.691}.
-
-\bibitem[Nelder and Wedderburn(1972)]{NelderWedderburn1972}
-Nelder JA, Wedderburn RWM (1972).
-\newblock ``Generalized Linear Models.''
-\newblock \emph{Journal of the Royal Statistical Society. Series A},
-\textbf{135}(3), 370--384.
-\newblock \doi{10.2307/2344614}.
+Linfoot, E. H. (1957).
+\newblock An informational measure of correlation.
+\newblock \emph{Information and Control}, \emph{1}(1), 85--89. \doi{10.1016/S0019-9958(57)90116-X}
 
 \bibitem[Pearson(1896)]{Pearson1896}
-Pearson K (1896).
-\newblock ``VII. Mathematical Contributions to the Theory of Evolution. III.
-Regression, Heredity, and Panmixia.''
+Pearson, K. (1896).
+\newblock VII. Mathematical contributions to the theory of evolution. III.
+Regression, heredity, and panmixia.
 \newblock \emph{Philosophical Transactions of the Royal Society of London.
-Series A}, \textbf{187}, 253--318.
-\newblock \doi{10.1098/rsta.1896.0007}.
+Series A}, \emph{187}, 253--318. \doi{10.1098/rsta.1896.0007}
 
 \bibitem[Pedersen(2024)]{tidygraph}
-Pedersen TL (2024).
-\newblock \emph{\pkg{tidygraph}: A Tidy API for Graph Manipulation}.
-\newblock \proglang{R} package version 1.3.1,
-\url{https://CRAN.R-project.org/package=tidygraph}.
-\newblock \doi{10.32614/CRAN.package.tidygraph}.
+Pedersen, T. L. (2024).
+\newblock \emph{\pkg{tidygraph}: A tidy API for graph manipulation} (Version
+1.3.1) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.tidygraph}
 
 \bibitem[{\proglang{R} Core Team}(2025)]{R}
-{\proglang{R} Core Team} (2025).
-\newblock \emph{\proglang{R}: A Language and Environment for Statistical Computing}.
-\newblock \proglang{R} Foundation for Statistical Computing, Vienna, Austria.
-\newblock \url{https://www.R-project.org/}.
+{\proglang{R} Core Team}. (2025).
+\newblock \emph{\proglang{R}: A language and environment for statistical
+computing} [Computer software].
+\newblock \proglang{R} Foundation for Statistical Computing. \url{https://www.R-project.org/}
 
 \bibitem[Sievert et~al.(2025)]{bslib}
-Sievert C, Cheng J, Aden-Buie G (2025).
-\newblock \emph{\pkg{bslib}: Custom Bootstrap Sass Themes for \pkg{shiny} and \pkg{rmarkdown}}.
-\newblock \proglang{R} package version 0.9.0,
-\url{https://CRAN.R-project.org/package=bslib}.
-\newblock \doi{10.32614/CRAN.package.bslib}.
+Sievert, C., Cheng, J., \& Aden-Buie, G. (2025).
+\newblock \emph{\pkg{bslib}: Custom Bootstrap Sass themes for \pkg{shiny} and
+\pkg{rmarkdown}} (Version 0.9.0) [\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.bslib}
 
 \bibitem[Soetewey et~al.(2026)]{SoeteweyHeuchenneClaesDescampe2026}
-Soetewey A, Heuchenne C, Claes A, Descampe A (2026).
-\newblock ``AssociationExplorer: A user-friendly \pkg{shiny} application for
-exploring associations and visual patterns.''
-\newblock \emph{SoftwareX}, \textbf{33}, 102483.
-\newblock \doi{10.1016/j.softx.2025.102483}.
+Soetewey, A., Heuchenne, C., Claes, A., \& Descampe, A. (2026).
+\newblock AssociationExplorer: A user-friendly \pkg{shiny} application for
+exploring associations and visual patterns.
+\newblock \emph{SoftwareX}, \emph{33}, Article 102483. \doi{10.1016/j.softx.2025.102483}
 
-\bibitem[Wickham and Bryan(2026)]{readxl}
-Wickham H, Bryan J (2026).
-\newblock \emph{\pkg{readxl}: Read Excel Files}.
-\newblock \proglang{R} package version 1.5.0,
-\url{https://CRAN.R-project.org/package=readxl}.
-\newblock \doi{10.32614/CRAN.package.readxl}.
+\bibitem[Wickham \& Bryan(2026)]{readxl}
+Wickham, H., \& Bryan, J. (2026).
+\newblock \emph{\pkg{readxl}: Read Excel files} (Version 1.5.0)
+[\proglang{R} package].
+\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.readxl}
 
 \end{thebibliography}
 
