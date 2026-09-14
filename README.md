@@ -16,7 +16,7 @@ For each selected pair of variables, the app chooses the measure and test accord
 |---|---|---|---|---|
 | Numerical vs. numerical | `R^2` from Pearson correlation | `R^2` from partial correlation | t-test | Scatter plot or added-variable residual plot |
 | Numerical vs. categorical | `eta^2` from ANOVA | Partial `eta^2` from ANCOVA | F-test | Group means or residualized group means |
-| Categorical vs. categorical | `V_L` | `V_L|Z` | Likelihood-ratio chi-square test | Contingency table with observed counts and Pearson residual colors |
+| Categorical vs. categorical | `V_L` | `V_L\|Z` | Likelihood-ratio chi-square test | Contingency table with observed counts and Pearson residual colors |
 
 For numerical-numerical pairs, the signed Pearson or partial correlation is kept for interpretation, but the network filtering strength is `R^2`. For numerical-categorical pairs, the app reports and filters on `eta^2` or partial `eta^2`, not on `sqrt(eta^2)`.
 
