@@ -4,14 +4,15 @@
 .Rproj.user/
 *.Rproj
 .Renviron
+.R-library/
+.renv-cache/
+renv/library/
+renv/staging/
 
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# RStudio
-.Rproj.user
 
 # knitr / rmarkdown
 *_cache/
@@ -34,3 +35,5 @@
 
 # output
 *.html
+/paper/paper.pdf
+/tmp/

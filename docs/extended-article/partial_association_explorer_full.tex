@@ -120,10 +120,13 @@ specific summaries that support a common exploratory workflow. The statistical
 framework is described in Section~\ref{sec:framework}, and additional
 computational details are collected in the Appendix.
 
-All screenshots and illustrative examples in the article use the Belgian data
-from the 2011 European Social Survey (ESS). The ESS is a cross-national survey
-covering social attitudes, behaviors, and socio-demographic characteristics.
-The Belgian extract is useful here because it combines numerical variables,
+All screenshots and illustrative examples in the article use an analysis-ready
+Belgian extract adapted from Round 11 of the European Social Survey (ESS). The
+ESS is a cross-national survey covering social attitudes, behaviors, and
+socio-demographic characteristics. The separately licensed extract is included
+in the software repository to make the examples reproducible; it is not an
+official ESS release or a substitute for the current data available from the
+ESS Data Portal. It is useful here because it combines numerical variables,
 categorical survey items, and plausible background controls such as age.
 
 The remainder of the article is organized as follows. Section~\ref{sec:overview}
@@ -199,7 +202,7 @@ formal test, and one local plot adapted to the data type.
 \par\smallskip
 \small Filtered association network.
 \caption{\label{fig:overviewshots} Workflow screens from \appname{} using the
-2011 Belgian wave of the European Social Survey. The interface moves from
+Belgian sample from European Social Survey Round 11. The interface moves from
 variable selection to a filtered network of retained associations.}
 \end{figure}
 
@@ -303,7 +306,7 @@ the linear effect of the control has been removed from both axes.
 \par\smallskip
 \small Conditional pair plot with age of respondent (\code{agea}) as control.
 \caption{\label{fig:numnumshots} Illustrative numerical--numerical pair plots
-from the 2011 Belgian ESS for perceived fairness of others (\code{pplfair})
+from the Belgian ESS Round 11 sample for perceived fairness of others (\code{pplfair})
 and trust in politicians (\code{trstplt}). The conditional version replaces
 the raw scatter with the added-variable view used to compute the partial
 association after adjusting for age of respondent (\code{agea}).}
@@ -402,7 +405,7 @@ fully explain it.
 \par\smallskip
 \small Conditional pair plot with age of respondent (\code{agea}) as control.
 \caption{\label{fig:numcatshots} Illustrative numerical--categorical pair plots
-from the 2011 Belgian ESS for perceived fairness of others (\code{pplfair}) by
+from the Belgian ESS Round 11 sample for perceived fairness of others (\code{pplfair}) by
 frequency of alcohol consumption (\code{alcfreq}). The conditional view
 displays residualized group means after removing the linear contribution of age
 of respondent (\code{agea}).}
@@ -600,7 +603,7 @@ simple marginal independence.
 \par\smallskip
 \small Conditional pair plot with age of respondent (\code{agea}) as control.
 \caption{\label{fig:catcatshots} Illustrative categorical--categorical pair
-plots from the 2011 Belgian ESS for frequency of internet use
+plots from the Belgian ESS Round 11 sample for frequency of internet use
 (\code{netusoft}) and father born in country (\code{facntr}). The cells print
 observed counts, while color encodes the Pearson residual relative to the
 fitted null model. The conditional panel adjusts for age of respondent
@@ -945,14 +948,14 @@ interface relies primarily on \pkg{shiny} \citep{Shiny}, \pkg{bslib}
 \citep{bslib}, \pkg{shinyjs} \citep{shinyjs}, and \pkg{visNetwork}
 \citep{VisNetwork}. Tabular displays rely on \pkg{reactable}
 \citep{reactable}. Data import and preprocessing use \pkg{readxl}
-\citep{readxl} and \pkg{janitor} \citep{janitor}. The network backend uses
-\pkg{tidygraph} \citep{tidygraph}. When available, exact large-table submatrix
-selection is performed with \pkg{lpSolve} \citep{lpSolve}.
+\citep{readxl} and \pkg{janitor} \citep{janitor}. When available, exact
+large-table submatrix selection is performed with \pkg{lpSolve}
+\citep{lpSolve}.
 
 The screenshots included in this article were generated from the app as of
 2026-07-10.
 
-\begin{thebibliography}{20}
+\begin{thebibliography}{19}
 \setlength{\itemsep}{0.5\baselineskip}
 
 \bibitem[Adams et~al.(2021)]{AdamsEtAl2021}
@@ -1021,12 +1024,6 @@ Regression, heredity, and panmixia.
 \newblock \emph{Philosophical Transactions of the Royal Society of London.
 Series A}, \emph{187}, 253--318. \doi{10.1098/rsta.1896.0007}
 
-\bibitem[Pedersen(2024)]{tidygraph}
-Pedersen, T. L. (2024).
-\newblock \emph{\pkg{tidygraph}: A tidy API for graph manipulation} (Version
-1.3.1) [\proglang{R} package].
-\newblock Comprehensive \proglang{R} Archive Network. \doi{10.32614/CRAN.package.tidygraph}
-
 \bibitem[{\proglang{R} Core Team}(2025)]{R}
 {\proglang{R} Core Team}. (2025).
 \newblock \emph{\proglang{R}: A language and environment for statistical
@@ -1060,7 +1057,7 @@ Wickham, H., \& Bryan, J. (2026).
 \renewenvironment{equation}{\begin{equation*}}{\end{equation*}}
 \renewenvironment{align}{\begin{align*}}{\end{align*}}
 
-\section{Supplementary computational details for numerical--numerical associations}
+\section{Details for numerical--numerical associations}
 \label{app:numnum}
 
 This Appendix records the explicit quantities computed by the app for
@@ -1149,7 +1146,7 @@ the residual pairs $(\tilde{X}_t, \tilde{Y}_t)$. In both cases the plot gives
 the local pattern behind the global $R^2$ measure, while the sign of the slope
 reflects the sign of the corresponding correlation coefficient.
 
-\section{Supplementary computational details for numerical--categorical associations}
+\section{Details for numerical--categorical associations}
 \label{app:numcat}
 
 Let $Y$ be numerical and let $X$ be categorical with levels
@@ -1268,7 +1265,7 @@ means are recomputed from the residuals.
 These bars show the remaining group differences after the linear dependence of
 $Y$ on the controls has been removed.
 
-\section{Supplementary computational details for categorical--categorical associations}
+\section{Details for categorical--categorical associations}
 \label{app:catcat}
 
 The categorical--categorical module is based on a joint multinomial model for

@@ -1,0 +1,37 @@
+Package: PartialAssociationExplorer
+Type: Project
+Title: Interactive Exploration of Marginal and Conditional Associations
+Version: 0.1.0.9000
+Authors@R: c(
+    person("Thaddée", "D'haegeleer", role = c("aut", "cre")),
+    person("Cédric", "Heuchenne", role = "aut"),
+    person("Antoine", "Soetewey", role = "aut",
+           comment = c(ORCID = "0000-0001-8159-0804"))
+  )
+Description: A Shiny application for comparing marginal and conditional
+    association structures in mixed-type data. The application supports
+    numerical-numerical, numerical-categorical, and categorical-categorical
+    variable pairs with type-specific tests, network displays, and local
+    diagnostics.
+License: MIT + file LICENSE
+URL: https://github.com/Thadhaeg/Partial-association-explorer
+BugReports: https://github.com/Thadhaeg/Partial-association-explorer/issues
+Depends:
+    R (>= 4.1)
+Imports:
+    bslib,
+    dplyr,
+    ggplot2,
+    janitor,
+    reactable,
+    readxl,
+    scales,
+    shiny,
+    shinycssloaders,
+    shinyjs,
+    tibble,
+    visNetwork
+Suggests:
+    lpSolve,
+    renv
+Encoding: UTF-8

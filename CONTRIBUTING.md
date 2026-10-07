@@ -34,9 +34,11 @@ For statistical changes, please include references or a short methodological jus
 
 1. Fork the repository and create a branch from `main`.
 2. Keep changes focused: one bug fix or feature per pull request is easiest to review.
-3. Test the app manually before opening the pull request.
-4. Describe what changed, why it changed, and how it was tested.
-5. If the user interface changes, include screenshots when possible.
+3. Add or update automated tests for behavior changed by the pull request.
+4. Run `Rscript tests/run_tests.R` from the repository root.
+5. Test affected application workflows manually.
+6. Describe what changed, why it changed, and how it was tested.
+7. If the user interface changes, include screenshots when possible.
 
 Example branch names:
 
@@ -47,8 +49,9 @@ git checkout -b feature/export-controls-descriptions
 
 ## Development notes
 
-- The main application file is [`app.r`](app.r).
-- The app currently follows a single-file Shiny structure, with most statistical helper functions defined inside `server()`.
+- The Shiny entry point is [`app.R`](app.R).
+- Pure statistical and display helpers live in [`R/core_associations.R`](R/core_associations.R) so they can be tested without launching Shiny.
+- Keep reactive state and rendering logic in `app.R`; reusable calculations should remain independent of Shiny when practical.
 - Numerical variables are detected with `is.numeric()`; non-numeric variables are treated as categorical.
 - The network filters numerical-numerical and numerical-categorical pairs with `R^2 / eta^2`, categorical-categorical pairs with `V_L`, and all pairs with p-values.
 - Categorical-categorical pair plots display observed counts and color cells by Pearson residuals.
@@ -69,7 +72,10 @@ Before submitting a pull request, please test at least:
 - Showing the unconditional comparison below a conditional pair plot.
 - Opening a large categorical-categorical pair plot that triggers the 7 by 7 submatrix display.
 
-The included Belgian ESS 2011 dataset in [`data/ESS11_BE_data.csv`](data/ESS11_BE_data.csv) can be used for quick manual checks.
+The included Belgian ESS Round 11 extract in
+[`data/ESS11_BE_data.csv`](data/ESS11_BE_data.csv) can be used for quick manual
+checks, subject to the license and provenance notes in
+[`data/README.md`](data/README.md).
 
 ## Documentation
 

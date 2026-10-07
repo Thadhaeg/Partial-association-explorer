@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use Partial Association Explorer, please cite the software and its accompanying JOSS paper."
+title: "Partial Association Explorer"
+type: software
+version: "0.1.0-development"
+license: MIT
+repository-code: "https://github.com/Thadhaeg/Partial-association-explorer"
+url: "https://github.com/Thadhaeg/Partial-association-explorer"
+abstract: >-
+  An R Shiny application for exploring marginal and conditional association
+  structures in datasets containing numerical and categorical variables.
+authors:
+  - given-names: "Thaddée"
+    family-names: "D'haegeleer"
+  - given-names: "Cédric"
+    family-names: "Heuchenne"
+  - given-names: "Antoine"
+    family-names: "Soetewey"
+    orcid: "https://orcid.org/0000-0001-8159-0804"
+keywords:
+  - association analysis
+  - conditional association
+  - exploratory data analysis
+  - mixed-type data
+  - R
+  - Shiny

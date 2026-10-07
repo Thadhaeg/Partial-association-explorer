@@ -1,0 +1,35 @@
+name: Bug report
+description: Report reproducible incorrect behavior or a failure.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please remove confidential or identifiable data before attaching files.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include a minimal dataset or code when licensing permits.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Analysis context
+      description: List selected variables, controls, thresholds, and the affected view.
+  - type: textarea
+    id: session
+    attributes:
+      label: Session information
+      description: Paste `sessionInfo()` and your operating system.
+      render: text
+    validations:
+      required: true

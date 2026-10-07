@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a research, teaching, or usability improvement.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Research or teaching use case
+      description: Explain the problem rather than only the proposed interface.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+    validations:
+      required: true
+  - type: textarea
+    id: methods
+    attributes:
+      label: Statistical considerations
+      description: If the request changes a measure or test, include references or expected results.
