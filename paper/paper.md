@@ -171,7 +171,7 @@ workflow with a model-based conditional layer [@soetewey2026].
 
 # AI usage disclosure
 
-OpenAI Codex was used to assist with copy-editing and formatting the manuscript and documentation. All changes were reviewed by the authors.
+OpenAI Codex was used to assist with copy-editing and formatting the manuscript and documentation. All AI-assisted changes were reviewed, edited, and validated by the authors, who remain responsible for the accuracy and correctness of the final manuscript and software.
 
 # Acknowledgements
 
