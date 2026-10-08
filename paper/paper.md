@@ -150,8 +150,7 @@ sparse multiway tables [@agresti2013].
 
 # Research impact statement
 
-The general software was presented as a poster at Beamm.conf26 in Brussels in
-July 2026
+The general software was presented as a poster at Beamm.conf26 in Brussels in June 2026
 [@dhaegeleer2026poster]. A separate full-length preprint applies the software to
 a Belgian extract from European Social Survey Round 11 and documents the case
 study summarized here [@dhaegeleer2026preprint]. The repository provides the
