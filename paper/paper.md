@@ -17,13 +17,15 @@ authors:
     affiliation: "1, 2"
   - name: Antoine Soetewey
     orcid: 0000-0001-8159-0804
-    affiliation: "1, 2"
+    affiliation: "1, 2, 3"
 affiliations:
   - name: Center for Applied Public Economics (CAPE), UCLouvain Saint-Louis Bruxelles, Belgium
     index: 1
   - name: HEC Liège, University of Liège, Belgium
     index: 2
-date: 6 October 2026
+  - name: Institute of Statistics, Biostatistics and Actuarial Sciences (ISBA), UCLouvain, Belgium
+    index: 3
+date: 8 October 2026
 bibliography: paper.bib
 ---
 
