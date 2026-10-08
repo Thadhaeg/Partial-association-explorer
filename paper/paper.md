@@ -100,7 +100,7 @@ mixed-type associations [@soetewey2026]. `Partial Association Explorer`
 retains this emphasis on accessibility but changes the analytical object from a
 single marginal network to a linked pair of marginal and adjusted results. This
 required pair-type-specific adjusted models, shared complete-case and
-control-matrix handling, nested likelihood comparisons for categorical
+control-matrix handling, and nested likelihood comparisons for categorical
 outcomes.
 
 # Software design
