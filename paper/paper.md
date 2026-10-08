@@ -114,9 +114,8 @@ making the marginal and adjusted views directly comparable.
 
 The network exposes the comparison directly. In the adjusted view, blue edges
 are retained in both analyses, green edges appear only after adjustment, and
-gray dashed edges occur only in the marginal alternative. Effect-size and
-$p$-value filters are applied to the active view, while the alternative remains
-visible for comparison. Selecting an edge opens its matched local diagnostic.
+gray dashed edges occur only in the marginal alternative. Effect size and
+$p$-value filters are applied to the active view, while the alternative remains visible for comparison. Selecting an edge opens its matched local diagnostic.
 
 ![Adjusted network for the ESS example with age as a control. Blue edges are retained, green edges appear after adjustment, and the gray dashed edge is present only in the marginal view.\label{fig:network}](section5_conditional_network.jpg){width="100%"}
 
@@ -135,8 +134,7 @@ counterpart so that a changed edge can be interpreted at the observation or
 cell level.
 
 For categorical pairs, the app compares nested structured multinomial models.
-With likelihood-ratio statistic $G^2=2(\ell_1-\ell_0)$ and complete-case sample
-size $n$, it reports
+With likelihood-ratio statistic $G^2=2(\ell_1-\ell_0)$ and complete-case sample size $n$, it reports
 
 $$V_L=\sqrt{1-\exp(-G^2/n)}.$$
 
